@@ -676,7 +676,7 @@
             };
 
             try {
-                const response = await fetch('http://localhost:8000/api/scan-job', {
+                const response = await fetch('/api/scan-job', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -693,7 +693,7 @@
                 
             } catch (error) {
                 console.error('Submission error:', error);
-                alert('Unable to connect to AOJA system. Please check that the backend is running on localhost:8000');
+                alert('Unable to connect to AOJA system. Please check that the backend is running on localhost:8080');
                 formState.currentPage = 5;
                 renderPage();
                 updateProgress();
