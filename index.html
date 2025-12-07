@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOJA System - Trauma-Informed Job Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #e6eef7 100%);
+            color: #2d3748;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 40px;
+            position: relative;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4299e1 0%, #3182ce 100%);
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 14px;
+            color: #718096;
+            font-weight: 500;
+        }
+
+        /* Page Layout */
+        .page {
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        .intro-text {
+            font-size: 16px;
+            margin-bottom: 25px;
+            color: #4a5568;
+        }
+
+        .question-text {
+            font-size: 18px;
+            margin-bottom: 25px;
+            color: #2d3748;
+            font-weight: 500;
+        }
+
+        .rating-scale {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .rating-btn {
+            padding: 12px 8px;
+            border: 2px solid #cbd5e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #4a5568;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .rating-btn:hover {
+            border-color: #4299e1;
+            background: #ebf8ff;
+            transform: translateY(-2px);
+        }
+
+        .rating-btn.selected {
+            background: #4299e1;
+            color: white;
+            border-color: #3182ce;
+        }
+
+        .rating-btn.unable {
+            grid-column: span 2;
+            background: #f7fafc;
+            border-style: dashed;
+            color: #718096;
+            font-weight: 500;
+        }
+
+        .rating-btn.unable.selected {
+            background: #e2e8f0;
+            color: #4a5568;
+            border-color: #a0aec0;
+        }
+
+        /* Validation Message */
+        .validation-message {
+            background: #f0fff4;
+            border-left: 4px solid #68d391;
+            padding: 12px 16px;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #276749;
+            display: none;
+        }
+
+        .validation-message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Navigation */
+        .nav-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #edf2f7;
+        }
+
+        .btn-primary {
+            background: #4299e1;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #3182ce;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Scale Labels */
+        .scale-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #718096;
+        }
+
+        /* Results Page */
+        .results-container {
+            text-align: center;
+        }
+
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: bold;
+            color: white;
+            position: relative;
+        }
+
+        .score-green { background: linear-gradient(135deg, #68d391 0%, #48bb78 100%); }
+        .score-yellow { background: linear-gradient(135deg, #f6e05e 0%, #ecc94b 100%); }
+        .score-red { background: linear-gradient(135deg, #fc8181 0%, #f56565 100%); }
+
+        .result-message {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            background: #f7fafc;
+        }
+
+        .result-green { background: #f0fff4; color: #276749; }
+        .result-yellow { background: #fffff0; color: #744210; }
+        .result-red { background: #fff5f5; color: #742a2a; }
+
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Keyboard focus */
+        .rating-btn:focus,
+        .btn:focus {
+            outline: 3px solid #a0aec0;
+            outline-offset: 2px;
+        }
+
+        /* Reset/Exit Button */
+        .exit-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #4a5568;
+        }
+
+        .exit-btn:hover {
+            background: #edf2f7;
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4299e1;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="exit-btn" onclick="resetForm()" aria-label="Exit and clear all data">Exit & Clear</button>
+        
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text" id="progressText" aria-live="polite">1/5</div>
+        </div>
+
+        <!-- Page 1: Introduction -->
+        <div id="page-1" class="page active">
+            <h1>AOJA Job Scanner</h1>
+            <p class="intro-text">
+                This tool helps you assess job environments through a trauma-informed lens. 
+                Take your time—there's no rush. Your responses are saved automatically every 30 seconds.
+            </p>
+            <div class="nav-buttons">
+                <div></div>
+                <button class="btn btn-primary" onclick="nextPage()">Begin</button>
+            </div>
+        </div>
+
+        <!-- Question Pages -->
+        <div id="page-2" class="page">
+            <h2>Question 1 of 5</h2>
+            <p class="question-text">"I have never felt fundamentally safe at work."</p>
+            <div class="scale-labels">
+                <span>1 = Never</span>
+                <span>10 = Always</span>
+            </div>
+            <div class="rating-scale" role="group" aria-label="Safety baseline rating">
+                <button class="rating-btn" data-value="1" onclick="selectRating('safety_baseline', 1)">1</button>
+                <button class="rating-btn" data-value="2" onclick="selectRating('safety_baseline', 2)">2</button>
+                <button class="rating-btn" data-value="3" onclick="selectRating('safety_baseline', 3)">3</button>
+                <button class="rating-btn" data-value="4" onclick="selectRating('safety_baseline', 4)">4</button>
+                <button class="rating-btn" data-value="5" onclick="selectRating('safety_baseline', 5)">5</button>
+                <button class="rating-btn" data-value="6" onclick="selectRating('safety_baseline', 6)">6</button>
+                <button class="rating-btn" data-value="7" onclick="selectRating('safety_baseline', 7)">7</button>
+                <button class="rating-btn" data-value="8" onclick="selectRating('safety_baseline', 8)">8</button>
+                <button class="rating-btn" data-value="9" onclick="selectRating('safety_baseline', 9)">9</button>
+                <button class="rating-btn" data-value="10" onclick="selectRating('safety_baseline', 10)">10</button>
+                <button class="rating-btn unable" onclick="selectRating('safety_baseline', null)">Unable to Assess</button>
+            </div>
+            <div class="validation-message" id="validation-1">
+                <strong>This is the trauma, not the truth.</strong> Your nervous system's response to unsafety is valid.
+            </div>
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" onclick="prevPage()">Back</button>
+                <button class="btn btn-primary" id="next-2" onclick="nextPage()" disabled>Next</button>
+            </div>
+        </div>
+
+        <div id="page-3" class="page">
+            <h2>Question 2 of 5</h2>
+            <p class="question-text">"Execution tasks (repetitive, post-launch) deplete me within 3 months."</p>
+            <div class="scale-labels">
+                <span>1 = Completely depletes</span>
+                <span>10 = Energizes</span>
+            </div>
+            <div class="rating-scale" role="group" aria-label="ADHD wiring rating">
+                <button class="rating-btn" data-value="1" onclick="selectRating('adhd_wiring', 1)">1</button>
+                <button class="rating-btn" data-value="2" onclick="selectRating('adhd_wiring', 2)">2</button>
+                <button class="rating-btn" data-value="3" onclick="selectRating('adhd_wiring', 3)">3</button>
+                <button class="rating-btn" data-value="4" onclick="selectRating('adhd_wiring', 4)">4</button>
+                <button class="rating-btn" data-value="5" onclick="selectRating('adhd_wiring', 5)">5</button>
+                <button class="rating-btn" data-value="6" onclick="selectRating('adhd_wiring', 6)">6</button>
+                <button class="rating-btn" data-value="7" onclick="selectRating('adhd_wiring', 7)">7</button>
+                <button class="rating-btn" data-value="8" onclick="selectRating('adhd_wiring', 8)">8</button>
+                <button class="rating-btn" data-value="9" onclick="selectRating('adhd_wiring', 9)">9</button>
+                <button class="rating-btn" data-value="10" onclick="selectRating('adhd_wiring', 10)">10</button>
+                <button class="rating-btn unable" onclick="selectRating('adhd_wiring', null)">Unable to Assess</button>
+            </div>
+            <div class="validation-message" id="validation-2">
+                <strong>This is the trauma, not the truth.</strong> Your ADHD wiring isn't broken—it's just different.
+            </div>
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" onclick="prevPage()">Back</button>
+                <button class="btn btn-primary" id="next-3" onclick="nextPage()" disabled>Next</button>
+            </div>
+        </div>
+
+        <div id="page-4" class="page">
+            <h2>Question 3 of 5</h2>
+            <p class="question-text">"I discount my capabilities unless externally validated."</p>
+            <div class="scale-labels">
+                <span>1 = Always discount</span>
+                <span>10 = Own my expertise</span>
+            </div>
+            <div class="rating-scale" role="group" aria-label="Capability rating">
+                <button class="rating-btn" data-value="1" onclick="selectRating('capability', 1)">1</button>
+                <button class="rating-btn" data-value="2" onclick="selectRating('capability', 2)">2</button>
+                <button class="rating-btn" data-value="3" onclick="selectRating('capability', 3)">3</button>
+                <button class="rating-btn" data-value="4" onclick="selectRating('capability', 4)">4</button>
+                <button class="rating-btn" data-value="5" onclick="selectRating('capability', 5)">5</button>
+                <button class="rating-btn" data-value="6" onclick="selectRating('capability', 6)">6</button>
+                <button class="rating-btn" data-value="7" onclick="selectRating('capability', 7)">7</button>
+                <button class="rating-btn" data-value="8" onclick="selectRating('capability', 8)">8</button>
+                <button class="rating-btn" data-value="9" onclick="selectRating('capability', 9)">9</button>
+                <button class="rating-btn" data-value="10" onclick="selectRating('capability', 10)">10</button>
+                <button class="rating-btn unable" onclick="selectRating('capability', null)">Unable to Assess</button>
+            </div>
+            <div class="validation-message" id="validation-3">
+                <strong>This is the trauma, not the truth.</strong> Your capability is inherent, not conditional.
+            </div>
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" onclick="prevPage()">Back</button>
+                <button class="btn btn-primary" id="next-4" onclick="nextPage()" disabled>Next</button>
+            </div>
+        </div>
+
+        <div id="page-5" class="page">
+            <h2>Question 4 of 5</h2>
+            <p class="question-text">"I need co-regulation (trusted colleague) to feel stable."</p>
+            <div class="scale-labels">
+                <span>1 = Desperately need</span>
+                <span>10 = Fully internal</span>
+            </div>
+            <div class="rating-scale" role="group" aria-label="Co-regulation rating">
+                <button class="rating-btn" data-value="1" onclick="selectRating('co_regulation', 1)">1</button>
+                <button class="rating-btn" data-value="2" onclick="selectRating('co_regulation', 2)">2</button>
+                <button class="rating-btn" data-value="3" onclick="selectRating('co_regulation', 3)">3</button>
+                <button class="rating-btn" data-value="4" onclick="selectRating('co_regulation', 4)">4</button>
+                <button class="rating-btn" data-value="5" onclick="selectRating('co_regulation', 5)">5</button>
+                <button class="rating-btn" data-value="6" onclick="selectRating('co_regulation', 6)">6</button>
+                <button class="rating-btn" data-value="7" onclick="selectRating('co_regulation', 7)">7</button>
+                <button class="rating-btn" data-value="8" onclick="selectRating('co_regulation', 8)">8</button>
+                <button class="rating-btn" data-value="9" onclick="selectRating('co_regulation', 9)">9</button>
+                <button class="rating-btn" data-value="10" onclick="selectRating('co_regulation', 10)">10</button>
+                <button class="rating-btn unable" onclick="selectRating('co_regulation', null)">Unable to Assess</button>
+            </div>
+            <div class="validation-message" id="validation-4">
+                <strong>This is the trauma, not the truth.</strong> Needing co-regulation is human, not weak.
+            </div>
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" onclick="prevPage()">Back</button>
+                <button class="btn btn-primary" id="next-5" onclick="nextPage()" disabled>Next</button>
+            </div>
+        </div>
+
+        <div id="page-6" class="page">
+            <h2>Question 5 of 5</h2>
+            <p class="question-text">"Financial stress is actively crushing me."</p>
+            <div class="scale-labels">
+                <span>1 = Severe stress</span>
+                <span>10 = Secure</span>
+            </div>
+            <div class="rating-scale" role="group" aria-label="Financial rating">
+                <button class="rating-btn" data-value="1" onclick="selectRating('financial', 1)">1</button>
+                <button class="rating-btn" data-value="2" onclick="selectRating('financial', 2)">2</button>
+                <button class="rating-btn" data-value="3" onclick="selectRating('financial', 3)">3</button>
+                <button class="rating-btn" data-value="4" onclick="selectRating('financial', 4)">4</button>
+                <button class="rating-btn" data-value="5" onclick="selectRating('financial', 5)">5</button>
+                <button class="rating-btn" data-value="6" onclick="selectRating('financial', 6)">6</button>
+                <button class="rating-btn" data-value="7" onclick="selectRating('financial', 7)">7</button>
+                <button class="rating-btn" data-value="8" onclick="selectRating('financial', 8)">8</button>
+                <button class="rating-btn" data-value="9" onclick="selectRating('financial', 9)">9</button>
+                <button class="rating-btn" data-value="10" onclick="selectRating('financial', 10)">10</button>
+                <button class="rating-btn unable" onclick="selectRating('financial', null)">Unable to Assess</button>
+            </div>
+            <div class="validation-message" id="validation-5">
+                <strong>This is the trauma, not the truth.</strong> Financial stress doesn't reflect your worth.
+            </div>
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" onclick="prevPage()">Back</button>
+                <button class="btn btn-primary" id="next-6" onclick="nextPage()" disabled>Submit</button>
+            </div>
+        </div>
+
+        <!-- Loading Page -->
+        <div id="page-loading" class="page">
+            <div class="loading">
+                <div class="spinner" aria-hidden="true"></div>
+                <p>Processing your AOJA scan...</p>
+            </div>
+        </div>
+
+        <!-- Results Page -->
+        <div id="page-results" class="page">
+            <div class="results-container">
+                <h1>Your AOJA Score</h1>
+                <div class="score-circle" id="scoreCircle">
+                    <span id="scoreValue">--</span>
+                </div>
+                <div class="result-message" id="resultMessage">
+                    <!-- Dynamic content -->
+                </div>
+                <div class="nav-buttons">
+                    <button class="btn btn-secondary" onclick="resetForm()">Start New Scan</button>
+                    <button class="btn btn-primary" onclick="downloadResults()">Download Report</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        const formState = {
+            currentPage: 1,
+            responses: {
+                safety_baseline: null,
+                adhd_wiring: null,
+                capability: null,
+                co_regulation: null,
+                financial: null
+            },
+            job_description: 'AOJA Trauma-Informed Assessment'
+        };
+
+        const totalPages = 5;
+        const pageElements = document.querySelectorAll('.page');
+
+        // Auto-save to localStorage
+        const autoSave = () => {
+            localStorage.setItem('aoja_form_state', JSON.stringify(formState));
+            console.log('Auto-saved at', new Date().toLocaleTimeString());
+        };
+
+        // Load saved state on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('aoja_form_state');
+            if (saved) {
+                const savedState = JSON.parse(saved);
+                if (confirm('We found a saved session. Would you like to continue where you left off?')) {
+                    Object.assign(formState, savedState);
+                    renderPage();
+                    updateProgress();
+                }
+            }
+        });
+
+        // Auto-save every 30 seconds
+        setInterval(autoSave, 30000);
+
+        // Navigation
+        function renderPage() {
+            pageElements.forEach(page => page.classList.remove('active'));
+            const currentPageElement = document.getElementById(`page-${formState.currentPage}`);
+            if (currentPageElement) {
+                currentPageElement.classList.add('active');
+            }
+
+            // Enable next button if current question is answered
+            if (formState.currentPage > 1 && formState.currentPage <= totalPages) {
+                const fieldName = getFieldNameForPage(formState.currentPage);
+                const nextBtn = document.getElementById(`next-${formState.currentPage}`);
+                if (nextBtn) {
+                    nextBtn.disabled = formState.responses[fieldName] === null;
+                }
+            }
+        }
+
+        function updateProgress() {
+            const progressPercent = (formState.currentPage - 1) / totalPages * 100;
+            document.getElementById('progressFill').style.width = `${progressPercent}%`;
+            document.getElementById('progressText').textContent = `${Math.min(formState.currentPage, totalPages)}/${totalPages}`;
+        }
+
+        function nextPage() {
+            if (formState.currentPage < totalPages) {
+                formState.currentPage++;
+                renderPage();
+                updateProgress();
+                autoSave();
+            } else if (formState.currentPage === totalPages) {
+                // Submit the form
+                submitForm();
+            }
+        }
+
+        function prevPage() {
+            if (formState.currentPage > 1) {
+                formState.currentPage--;
+                renderPage();
+                updateProgress();
+                autoSave();
+            }
+        }
+
+        function getFieldNameForPage(pageNum) {
+            const mapping = {
+                2: 'safety_baseline',
+                3: 'adhd_wiring',
+                4: 'capability',
+                5: 'co_regulation',
+                6: 'financial'
+            };
+            return mapping[pageNum];
+        }
+
+        function selectRating(field, value) {
+            formState.responses[field] = value;
+            
+            // Update UI
+            const pageNum = Object.keys(formState.responses).indexOf(field) + 2;
+            const pageElement = document.getElementById(`page-${pageNum}`);
+            const buttons = pageElement.querySelectorAll('.rating-btn');
+            
+            buttons.forEach(btn => {
+                btn.classList.remove('selected');
+                if ((value === null && btn.classList.contains('unable')) ||
+                    (value !== null && parseInt(btn.dataset.value) === value)) {
+                    btn.classList.add('selected');
+                }
+            });
+
+            // Show validation message
+            const validationEl = document.getElementById(`validation-${pageNum - 1}`);
+            validationEl.classList.add('show');
+
+            // Enable next button
+            const nextBtn = document.getElementById(`next-${pageNum}`);
+            if (nextBtn) {
+                nextBtn.disabled = false;
+            }
+
+            autoSave();
+        }
+
+        // Reset form
+        function resetForm() {
+            if (confirm('Are you sure you want to exit and clear all data? This cannot be undone.')) {
+                localStorage.removeItem('aoja_form_state');
+                formState.currentPage = 1;
+                formState.responses = {
+                    safety_baseline: null,
+                    adhd_wiring: null,
+                    capability: null,
+                    co_regulation: null,
+                    financial: null
+                };
+                renderPage();
+                updateProgress();
+            }
+        }
+
+        // Submit form to backend
+        async function submitForm() {
+            // Show loading page
+            formState.currentPage = 'loading';
+            renderPage();
+
+            const payload = {
+                job_description: formState.job_description,
+                trauma: {
+                    safety_baseline: formState.responses.safety_baseline ?? 5,
+                    adhd_wiring: formState.responses.adhd_wiring ?? 5,
+                    capability: formState.responses.capability ?? 5,
+                    co_regulation: formState.responses.co_regulation ?? 5,
+                    financial: formState.responses.financial ?? 5
+                }
+            };
+
+            try {
+                const response = await fetch('http://localhost:8000/api/scan-job', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                showResults(result);
+                
+            } catch (error) {
+                console.error('Submission error:', error);
+                alert('Unable to connect to AOJA system. Please check that the backend is running on localhost:8000');
+                formState.currentPage = 5;
+                renderPage();
+                updateProgress();
+            }
+        }
+
+        // Display results
+        function showResults(result) {
+            formState.currentPage = 'results';
+            renderPage();
+
+            // Calculate AOJA score (average of all dimensions)
+            const scores = Object.values(formState.responses).filter(v => v !== null);
+            const validScores = scores.length > 0 ? scores : [5, 5, 5, 5, 5]; // Default if all "Unable"
+            const averageScore = validScores.reduce((a, b) => a + b, 0) / validScores.length;
+            const finalScore = Math.round(averageScore * 10) / 10;
+
+            document.getElementById('scoreValue').textContent = finalScore.toFixed(1);
+
+            // Color code based on score
+            const scoreCircle = document.getElementById('scoreCircle');
+            const resultMessage = document.getElementById('resultMessage');
+            
+            if (finalScore >= 7) {
+                scoreCircle.className = 'score-circle score-green';
+                resultMessage.className = 'result-message result-green';
+                resultMessage.innerHTML = `
+                    <h3>High Resilience Baseline</h3>
+                    <p>Your trauma responses show strong adaptive capacity. 
+                    You're likely to thrive in environments with autonomy and trust.</p>
+                `;
+            } else if (finalScore >= 4) {
+                scoreCircle.className = 'score-circle score-yellow';
+                resultMessage.className = 'result-message result-yellow';
+                resultMessage.innerHTML = `
+                    <h3>Moderate Support Needs</h3>
+                    <p>You benefit from structured support and clear communication. 
+                    Seek roles with defined boundaries and collaborative teams.</p>
+                `;
+            } else {
+                scoreCircle.className = 'score-circle score-red';
+                resultMessage.className = 'result-message result-red';
+                resultMessage.innerHTML = `
+                    <h3>High Support Environment Needed</h3>
+                    <p>Your trauma responses indicate you need workplaces with exceptional psychological safety. 
+                    Prioritize organizations with strong trauma-informed practices.</p>
+                `;
+            }
+
+            // Add detailed breakdown
+            const breakdown = document.createElement('div');
+            breakdown.style.marginTop = '20px';
+            breakdown.style.textAlign = 'left';
+            breakdown.innerHTML = `
+                <h4 style="margin-bottom: 10px;">Your Dimensions:</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li>Safety Baseline: ${formState.responses.safety_baseline ?? 'Unable to Assess'}/10</li>
+                    <li>ADHD Wiring: ${formState.responses.adhd_wiring ?? 'Unable to Assess'}/10</li>
+                    <li>Capability: ${formState.responses.capability ?? 'Unable to Assess'}/10</li>
+                    <li>Co-regulation: ${formState.responses.co_regulation ?? 'Unable to Assess'}/10</li>
+                    <li>Financial: ${formState.responses.financial ?? 'Unable to Assess'}/10</li>
+                </ul>
+            `;
+            resultMessage.appendChild(breakdown);
+
+            // Clear saved data on successful submission
+            localStorage.removeItem('aoja_form_state');
+        }
+
+        // Download results (placeholder)
+        function downloadResults() {
+            const resultsText = `
+AOJA Trauma-Informed Assessment Report
+Generated: ${new Date().toLocaleString()}
+
+Scores:
+- Safety Baseline: ${formState.responses.safety_baseline ?? 'Unable to Assess'}/10
+- ADHD Wiring: ${formState.responses.adhd_wiring ?? 'Unable to Assess'}/10
+- Capability: ${formState.responses.capability ?? 'Unable to Assess'}/10
+- Co-regulation: ${formState.responses.co_regulation ?? 'Unable to Assess'}/10
+- Financial: ${formState.responses.financial ?? 'Unable to Assess'}/10
+
+Average Score: ${document.getElementById('scoreValue').textContent}
+            `;
+            
+            const blob = new Blob([resultsText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'aoja-assessment-results.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                const activeBtn = document.querySelector('.page.active .btn-primary:not(:disabled)');
+                if (activeBtn) activeBtn.click();
+            } else if (e.key === 'ArrowLeft') {
+                const backBtn = document.querySelector('.page.active .btn-secondary');
+                if (backBtn) backBtn.click();
+            }
+        });
+
+        // Initialize
+        renderPage();
+        updateProgress();
+    </script>
+</body>
+</html>
