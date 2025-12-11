@@ -1,0 +1,21 @@
+# /backend/requirements.txt - Paste this EXACT content
+
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+supabase==2.0.3
+stripe==7.8.0
+clerk-backend-api==0.3.0
+
+# NEW: Required for Clerk JWT verification
+PyJWT==2.8.0
+pyjwt[crypto]==2.8.0  # Adds cryptography for RS256 signatures
+
+# NEW: Required for JWKS (JSON Web Key Set) fetching
+python-jose[cryptography]==3.3.0
+
+# NEW: For Clerk API calls
+httpx==0.25.2
+
+# Existing utilities
+python-dotenv==1.0.0
+pydantic==2.5.0
