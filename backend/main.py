@@ -281,31 +281,77 @@ async def scan_job_endpoint(
     
     return JobScanResponse(**result)
 
+class TransferModuleRequest(BaseModel):
+    survey: dict
+    job_description: Optional[str] = None
+    scan_results: Optional[dict] = None
+    created_at: str
+
+@app.post("/api/user/transfer-pending-module")
+async def transfer_pending_module(
+    request: TransferModuleRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """Transfer guest module to authenticated user."""
+    user_id = await get_clerk_user(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Deactivate old active module
+    supabase.table("modules").update({"is_active": False}).eq("user_id", user_id).eq("is_active", True).execute()
+    
+    # Insert transferred module
+    supabase.table("modules").insert({
+        "user_id": user_id,
+        "survey_data": request.survey,
+        "job_description": request.job_description or "",
+        "scan_results": request.scan_results,
+        "is_active": True,
+        "created_at": request.created_at,
+        "completed_at": request.scan_results and datetime.utcnow().isoformat() or None
+    }).execute()
+    
+    return {"success": True}
+
 @app.post("/api/create-checkout-session")
 async def create_checkout_session(
     request: StripeCheckoutRequest,
     authorization: Optional[str] = Header(None)
 ):
-    """Create Stripe Checkout for credit purchases."""
+    """Create Stripe Checkout with proper customer handling."""
     user_id = await get_clerk_user(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Get or create Stripe customer
-    user_response = supabase.table("users").select("stripe_customer_id").eq("user_id", user_id).execute()
-    customer_id = None
-    if user_response.data and user_response.data[0].get("stripe_customer_id"):
-        customer_id = user_response.data[0]["stripe_customer_id"]
-    else:
-        # Create new customer
-        customer = stripe.Customer.create(
-            email=supabase.table("users").select("email").eq("user_id", user_id).execute().data[0]["email"],
-            metadata={"clerk_user_id": user_id}
-        )
-        customer_id = customer.id
-        supabase.table("users").update({"stripe_customer_id": customer_id}).eq("user_id", user_id).execute()
-    
     try:
+        # FIX: Check if user exists first, create if not
+        user_response = supabase.table("users").select("*").eq("user_id", user_id).execute()
+        
+        if not user_response.data:
+            # User doesn't exist yet (e.g., just signed up), create record
+            # Get email from Clerk via their API or use a placeholder
+            supabase.table("users").insert({
+                "user_id": user_id,
+                "credits_remaining": 5,  # Give them 5 credits on first checkout
+                "email": f"user_{user_id[:8]}@clerk.dev",  # Temporary email
+                "created_at": datetime.utcnow().isoformat()
+            }).execute()
+            user_data = {"user_id": user_id, "email": f"user_{user_id[:8]}@clerk.dev"}
+        else:
+            user_data = user_response.data[0]
+        
+        customer_id = user_data.get("stripe_customer_id")
+        
+        # Create Stripe customer if doesn't exist
+        if not customer_id:
+            customer = stripe.Customer.create(
+                email=user_data.get("email", f"user_{user_id[:8]}@clerk.dev"),
+                metadata={"clerk_user_id": user_id}
+            )
+            customer_id = customer.id
+            supabase.table("users").update({"stripe_customer_id": customer_id}).eq("user_id", user_id).execute()
+        
+        # Create checkout session
         session = stripe.checkout.Session.create(
             line_items=[{
                 'price_data': {
@@ -313,7 +359,7 @@ async def create_checkout_session(
                     'unit_amount': 500,  # $5.00 per credit
                     'product_data': {
                         'name': f'{request.credits_to_purchase} Credit(s)',
-                        'description': 'AOJA Job Scan Credits'
+                        'description': 'AOJA Job Scan Credits - One-time purchase'
                     },
                 },
                 'quantity': request.credits_to_purchase,
@@ -321,11 +367,14 @@ async def create_checkout_session(
             mode='payment',
             client_reference_id=user_id,
             customer=customer_id,
-            success_url=f'{FRONTEND_URL}?payment=success',
+            success_url=f'{FRONTEND_URL}?payment=success&credits={request.credits_to_purchase}',
             cancel_url=f'{FRONTEND_URL}?payment=cancelled',
         )
+        
         return {"sessionId": session.id}
+        
     except Exception as e:
+        print(f"❌ Stripe error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/user/credits")
@@ -423,17 +472,17 @@ async def serve_frontend():
     with open(frontend_path, "r") as f:
         html_content = f.read()
     
-    # Inject Clerk publishable key
-    clerk_key = NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY or 'your_fallback_key'
+    # Inject Clerk key
+    clerk_key = NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY or 'pk_test_fallback'
     html_content = html_content.replace(
         'data-clerk-publishable-key=""',
         f'data-clerk-publishable-key="{clerk_key}"'
     )
     
-    # Inject Stripe publishable key for JavaScript
+    # Inject Stripe key (USE THIS EXACT PATTERN - matches 'INJECT_ME')
     stripe_key = os.getenv("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY", "")
     html_content = html_content.replace(
-        "window.STRIPE_PUBLISHABLE_KEY = '%%STRIPE_PUBLISHABLE_KEY%%';",
+        "window.STRIPE_PUBLISHABLE_KEY = 'INJECT_ME';",
         f"window.STRIPE_PUBLISHABLE_KEY = '{stripe_key}';"
     )
     
