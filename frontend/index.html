@@ -358,7 +358,7 @@
     </div>
 
     <script>
-        // SAFE DATE FORMATTER - Add this at top
+        // SAFE DATE FORMATTER
         function formatDate(dateString) {
             if (!dateString) return 'No date';
             return new Date(dateString).toLocaleDateString('en-US', {
@@ -436,13 +436,13 @@
             survey: {},
             currentQuestion: 0,
             lastJobResult: null,
-            modules: [],           // All modules for user
-            activeModule: null,    // Current active module
+            modules: [],
+            activeModule: null,
             clerkReady: false,
             creditCost: 1
         };
 
-        // CLERK INITIALIZATION - SINGLE, CLEAN VERSION
+        // CLERK INITIALIZATION
         let clerkInitStarted = false;
 
         window.addEventListener('load', async function() {
@@ -452,7 +452,6 @@
             console.log("🔄 Initializing Clerk...");
             
             try {
-                // Wait for Clerk script to load
                 const checkClerk = setInterval(() => {
                     if (window.Clerk && window.Clerk.load) {
                         clearInterval(checkClerk);
@@ -461,13 +460,10 @@
                 }, 100);
                 
                 async function loadClerk() {
-                    // Load Clerk with key from data attribute
                     await window.Clerk.load();
-                    
                     appState.clerkReady = true;
                     console.log("✅ Clerk loaded successfully");
                     
-                    // CORRECT: Use official auth check methods
                     const user = window.Clerk.user;
                     const session = window.Clerk.session;
                     
@@ -479,7 +475,6 @@
                         handleAuthChange(null);
                     }
                     
-                    // Listen for auth changes
                     window.Clerk.addListener(async ({ user, session }) => {
                         if (user && session) {
                             await handleAuthSuccess(user);
@@ -495,24 +490,20 @@
             }
         });
 
-        // Handle successful auth
         async function handleAuthSuccess(user) {
             appState.userId = user.id;
             await fetchCredits();
             await fetchModules();
             updateHeaderForAuthUser();
-            renderModules();
-            navigate('modules');
+            navigate('modulesPage'); // FIXED: Use correct ID
         }
 
-        // Handle auth change
         function handleAuthChange(user) {
             appState.userId = user?.id || null;
             
             if (user) {
                 handleAuthSuccess(user);
             } else {
-                // Logged out
                 updateHeaderForGuest();
                 navigate('welcome');
                 appState.modules = [];
@@ -521,16 +512,14 @@
             }
         }
 
-        // Transfer pending module after signup (OUTSIDE load event)
+        // Transfer pending module
         window.Clerk?.addListener(async ({ user }) => {
             if (user && appState.userId && localStorage.getItem('pendingModule')) {
                 console.log("🔄 Transferring pending module...");
-                
                 const pending = JSON.parse(localStorage.getItem('pendingModule'));
                 
                 try {
                     const token = await window.Clerk.session.getToken();
-                    
                     await fetch('/api/user/transfer-pending-module', {
                         method: 'POST',
                         headers: {
@@ -539,43 +528,31 @@
                         },
                         body: JSON.stringify(pending)
                     });
-                    
                     localStorage.removeItem('pendingModule');
-                    await fetchModules(); // Reload to show transferred data
-                    
+                    await fetchModules();
                 } catch (error) {
                     console.error("❌ Failed to transfer module:", error);
                 }
             }
         });
 
-        function setupHeaderControls() {
-            const headerControls = document.getElementById('headerControls');
-            const signInBtn = document.getElementById('signInBtn');
-            const signUpBtn = document.getElementById('signUpBtn');
-            
-            if (signInBtn) signInBtn.onclick = () => window.Clerk.openSignIn();
-            if (signUpBtn) signUpBtn.onclick = () => window.Clerk.openSignUp();
-            if (headerControls) headerControls.classList.remove('hidden');
-        }
-
         function updateHeaderForGuest() {
             const headerControls = document.getElementById('headerControls');
             if (!headerControls) return;
             
-            // Only show auth buttons, hide everything else
             headerControls.innerHTML = `
                 <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
                 <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
             `;
             
-            // Add click handlers
             document.getElementById('signInBtn').onclick = () => window.Clerk.openSignIn();
             document.getElementById('signUpBtn').onclick = () => window.Clerk.openSignUp();
         }
 
         function updateHeaderForAuthUser() {
             const headerControls = document.getElementById('headerControls');
+            if (!headerControls) return;
+            
             headerControls.innerHTML = `
                 <div class="credit-display" id="creditDisplay">Credits: <span id="creditValue">-</span></div>
                 <button class="btn btn-primary" id="buyCreditsHeaderBtn" onclick="buyMoreCredits()" style="padding: 8px 16px; font-size: 14px;">Buy More</button>
@@ -629,9 +606,7 @@
             
             element.classList.add('selected');
             appState.survey[dimension] = value;
-            
             document.getElementById('nextBtn').disabled = false;
-            
             console.log("✅ Survey updated:", appState.survey);
         }
 
@@ -646,12 +621,9 @@
         }
 
         function completeSurvey() {
-            // Save survey to active module
             if (appState.userId) {
-                // For logged-in users, create new active module in DB
                 createNewModule();
             } else {
-                // For guests, save to localStorage
                 const pendingModule = {
                     survey: appState.survey,
                     created_at: new Date().toISOString()
@@ -663,7 +635,6 @@
         }
 
         function createNewModule() {
-            // Deactivate old active module and create new one
             supabase.table("modules").update({"is_active": false}).eq("user_id", appState.userId).eq("is_active", True).execute();
             
             supabase.table("modules").insert({
@@ -684,13 +655,19 @@
             }
         }
 
-        // NAVIGATION
-        function navigate(page) {
-            // Wait for DOM to be ready
+        // ✅ FIXED: Navigation with retry limit and NO circular dependency
+        function navigate(page, retryCount = 0) {
+            const MAX_RETRIES = 50;
+            
             const targetElement = document.getElementById(page);
             if (!targetElement) {
-                console.warn(`⏳ DOM not ready for page: ${page}, retrying...`);
-                setTimeout(() => navigate(page), 100);
+                if (retryCount < MAX_RETRIES) {
+                    console.warn(`⏳ DOM not ready for page: ${page}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+                    setTimeout(() => navigate(page, retryCount + 1), 100);
+                } else {
+                    console.error(`❌ Failed to find page element '${page}' after ${MAX_RETRIES} attempts`);
+                    console.error(`Available elements:`, Array.from(document.querySelectorAll('.page')).map(el => el.id));
+                }
                 return;
             }
             
@@ -702,13 +679,13 @@
             // Show target page
             targetElement.classList.add('active');
             
-            // Handle special cases
+            // Handle special cases WITHOUT calling renderModules again
             if (page === 'survey') {
                 appState.currentQuestion = 0;
                 renderQuestion();
-            } else if (page === 'modules') {
-                renderModules(); // Ensure this runs after DOM ready
             }
+            
+            console.log(`✅ Navigated to page: ${page}`);
         }
 
         // CREDITS
@@ -748,19 +725,16 @@
             const buyCreditsBtn = document.getElementById('buyCreditsBtn');
             
             if (!appState.userId) {
-                // Guest user
                 scanBtn.textContent = 'Scan Job (Free Preview)';
                 scanBtn.disabled = false;
                 scanBtn.style.display = 'block';
                 buyCreditsBtn.style.display = 'none';
             } else if (appState.credits > 0) {
-                // Authenticated with credits
                 scanBtn.textContent = `Scan Job (1 Credit)`;
                 scanBtn.disabled = false;
                 scanBtn.style.display = 'block';
                 buyCreditsBtn.style.display = 'none';
             } else {
-                // Authenticated, no credits
                 scanBtn.style.display = 'none';
                 buyCreditsBtn.style.display = 'block';
             }
@@ -799,7 +773,6 @@
             scanBtn.textContent = 'Scanning...';
 
             try {
-                // Convert survey to TraumaInput
                 const traumaPayload = {
                     safety_baseline: appState.survey.safety_baseline || 5,
                     adhd_wiring: appState.survey.adhd_wiring || 5,
@@ -848,7 +821,6 @@
 
         // RESULTS DISPLAY
         function displayResults(result) {
-            // Overall score
             const scoreEl = document.getElementById('overallScore');
             scoreEl.textContent = `${Math.round(result.overall_score)}%`;
             scoreEl.className = `score-circle ${
@@ -856,7 +828,6 @@
                 result.overall_score >= 40 ? 'score-medium' : 'score-poor'
             }`;
 
-            // Dimensional scores
             const dimensionsEl = document.getElementById('dimensionalScores');
             dimensionsEl.innerHTML = '';
             result.dimensional_match.forEach(dim => {
@@ -873,7 +844,6 @@
                 `;
             });
 
-            // Flags
             const greenFlagsEl = document.getElementById('greenFlags');
             const redFlagsEl = document.getElementById('redFlags');
             
@@ -891,7 +861,6 @@
         // MODULES SYSTEM
         async function fetchModules() {
             if (!appState.userId) {
-                // Load from localStorage for guests
                 loadGuestModules();
                 return;
             }
@@ -922,20 +891,16 @@
             renderModules();
         }
 
-        // ✅ NEW: Bulletproof renderModules() with DOM safety
+        // ✅ SAFE: Modules rendering that doesn't call navigate()
         function renderModules() {
-            // CRITICAL: Wait for DOM to be ready
             const container = document.getElementById('modulesContainer');
             if (!container) {
-                console.warn("⏳ Modules container not ready, retrying...");
-                setTimeout(renderModules, 100);
+                console.warn("⚠️ Modules container not found - skipping render");
                 return;
             }
             
-            // Clear existing content
             container.innerHTML = '';
             
-            // Add Retake Survey button (only for authenticated users)
             if (appState.userId) {
                 const retakeBtn = document.createElement('button');
                 retakeBtn.className = 'btn btn-primary retake-survey-btn';
@@ -944,7 +909,6 @@
                 container.appendChild(retakeBtn);
             }
             
-            // Render active module (current workflow)
             const activeMod = appState.activeModule || 
                              appState.modules.find(m => m.is_active) || 
                              appState.modules[0];
@@ -954,7 +918,6 @@
                 if (activeElement) container.appendChild(activeElement);
             }
             
-            // Render saved modules (read-only)
             appState.modules.filter(m => !m.is_active).forEach(mod => {
                 const savedElement = createModuleElement(mod, false);
                 if (savedElement) container.appendChild(savedElement);
@@ -963,9 +926,7 @@
             console.log("✅ Modules rendered successfully");
         }
 
-        // ✅ NEW: Safe module element creation
         function createModuleElement(moduleData, isActive = false) {
-            // CRITICAL: Validate data exists
             if (!moduleData) {
                 console.warn("⚠️ Invalid module data");
                 return null;
@@ -974,20 +935,17 @@
             const moduleDiv = document.createElement('div');
             moduleDiv.className = `module ${isActive ? 'active' : 'saved'}`;
             
-            // Build content safely
             const completedAt = moduleData.completed_at || moduleData.created_at;
             const surveyData = moduleData.survey_data || moduleData.survey || {};
             const jobDesc = moduleData.job_description || '';
             const hasResults = moduleData.scan_results;
             
-            // Create header
             const headerDiv = document.createElement('div');
             headerDiv.className = 'module-header';
             headerDiv.innerHTML = `
                 <div class="module-title">${isActive ? 'Current Analysis' : 'Previous Analysis'}</div>
             `;
             
-            // Create survey panel
             const surveyPanel = document.createElement('div');
             surveyPanel.className = 'survey-results-panel';
             surveyPanel.innerHTML = `
@@ -995,7 +953,6 @@
                 ${renderSurveyResults(surveyData)}
             `;
             
-            // Create job description section
             const jobSection = document.createElement('div');
             jobSection.className = 'job-description-section';
             jobSection.style.margin = '20px 0';
@@ -1004,7 +961,6 @@
                 <p style="font-size: 13px; color: #6b7280; white-space: pre-wrap;">${jobDesc || 'No job description scanned yet.'}</p>
             `;
             
-            // Add results preview if available
             if (hasResults) {
                 const resultsDiv = document.createElement('div');
                 resultsDiv.style.margin = '20px 0';
@@ -1020,12 +976,10 @@
                 jobSection.appendChild(resultsDiv);
             }
             
-            // Create date element
             const dateDiv = document.createElement('div');
             dateDiv.className = 'module-date';
             dateDiv.textContent = formatDate(completedAt);
             
-            // Assemble module
             moduleDiv.appendChild(headerDiv);
             moduleDiv.appendChild(surveyPanel);
             moduleDiv.appendChild(jobSection);
@@ -1070,19 +1024,15 @@
                 return;
             }
             
-            // Deactivate current module
             if (appState.activeModule?.id) {
                 supabase.table("modules").update({"is_active": false}).eq("id", appState.activeModule.id).execute();
             }
             
-            // Start new survey
             appState.survey = {};
             appState.currentQuestion = 0;
             appState.lastJobResult = null;
             
-            // Create new active module
             createNewModule();
-            
             navigate('survey');
         }
 
@@ -1126,7 +1076,6 @@
             a.click();
             URL.revokeObjectURL(url);
             
-            // Deduct credit after download
             if (appState.userId) {
                 appState.credits--;
                 updateCreditDisplay();
@@ -1141,7 +1090,6 @@
                 return;
             }
             
-            // Get Stripe key from environment (injected by backend)
             const stripePublishableKey = window.STRIPE_PUBLISHABLE_KEY || 'pk_live_realoneloaded';
             
             if (!window.Stripe) {
@@ -1165,8 +1113,6 @@
                 }
                 
                 const { sessionId } = await response.json();
-                
-                // Redirect to Stripe
                 const stripe = window.Stripe(stripePublishableKey);
                 const { error } = await stripe.redirectToCheckout({ sessionId });
                 
@@ -1178,7 +1124,6 @@
             }
         }
 
-        // Load Stripe.js
         function loadStripe(publishableKey) {
             return new Promise((resolve) => {
                 const script = document.createElement('script');
@@ -1192,10 +1137,8 @@
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('payment') === 'success') {
-                // Clear URL params
                 window.history.replaceState({}, document.title, window.location.pathname);
                 
-                // Reload credits and modules
                 if (appState.userId) {
                     fetchCredits();
                     fetchModules();
