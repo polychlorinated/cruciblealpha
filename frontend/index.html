@@ -3,375 +3,1064 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AOJA Scanner</title>
+    <title>AOJA - Trauma-Informed Job Scanner</title>
+    
+    <!-- OFFICIAL CLERK PATTERN -->
+    <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key="pk_test_YWRlcXVhdGUtbGlvbmVzcy0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        src="https://adequate-lioness-36.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+        type="text/javascript">
+    </script>
+    
     <style>
-        /* Your existing CSS from previous response */
         :root {
-            --safe-green: #10b981;
-            --caution-yellow: #f59e0b;
-            --critical-red: #ef4444;
-            --bg-primary: #f9fafb;
-            --bg-secondary: #ffffff;
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
             --border-color: #e5e7eb;
+            --primary-color: #3b82f6;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
         }
         
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            color: var(--text-primary);
-            line-height: 1.6;
-            min-height: 100vh;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 80px 12px 24px;
+            background: #f9fafb;
+            color: #111827;
         }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: var(--bg-secondary);
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 32px;
-            position: relative;
-        }
-        .credit-bar {
-            position: absolute;
-            top: -20px;
-            left: 0;
-            right: 0;
-            background: #3730a3;
-            color: white;
+        
+        /* HEADER */
+        header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: white;
+            border-bottom: 1px solid var(--border-color);
             padding: 12px 24px;
-            border-radius: 12px 12px 0 0;
-            display: none;
+            z-index: 1000;
+            display: flex;
             justify-content: space-between;
             align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        .credit-bar.active { display: flex; }
-        .credits { font-weight: 600; }
-        .account-btn {
-            background: rgba(255,255,255,0.2);
-            border: 1px solid rgba(255,255,255,0.3);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            cursor: pointer;
+        
+        .logo { font-size: 20px; font-weight: 700; color: var(--primary-color); }
+        
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .header-controls.hidden { display: none; }
+        
+        .credit-display {
             font-size: 14px;
+            font-weight: 600;
+            color: var(--primary-color);
         }
-        .page { display: none; animation: fadeIn 0.4s ease; }
-        .page.active { display: block; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
+        
+        .credit-display.warning {
+            color: var(--danger-color);
         }
-        .rating-scale {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
-            gap: 8px;
+        
+        /* MAIN CONTENT */
+        .modules-container {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        
+        .module {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        
+        .module-date {
+            position: absolute;
+            bottom: 12px;
+            right: 16px;
+            font-size: 12px;
+            color: #6b7280;
+            font-style: italic;
+        }
+        
+        .module.active {
+            border: 2px solid var(--primary-color);
+        }
+        
+        .module.saved {
+            opacity: 0.9;
+        }
+        
+        .module-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 20px;
         }
-        .rating-btn {
-            padding: 14px;
-            border: 2px solid var(--border-color);
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            cursor: pointer;
+        
+        .module-title {
+            font-size: 18px;
             font-weight: 600;
         }
-        .rating-btn.selected {
-            background: #3b82f6;
-            color: white;
-            border-color: #2563eb;
+        
+        .survey-results-panel {
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            border-left: 4px solid var(--primary-color);
         }
-        .nav-buttons {
+        
+        .survey-results-panel h4 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .survey-result-item {
             display: flex;
-            gap: 12px;
-            margin-top: 32px;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 13px;
         }
-        .btn {
-            padding: 14px 24px;
-            border: none;
+        
+        .page { display: none; }
+        .page.active { display: block; }
+        
+        .progress-bar {
+            width: 100%; height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 32px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            transition: width 0.3s ease;
+        }
+        
+        .options { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
+        
+        .option {
+            padding: 16px;
+            border: 2px solid var(--border-color);
             border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .option:hover { border-color: var(--primary-color); background: #f9fafb; }
+        .option.selected { 
+            border-color: var(--primary-color); 
+            background: #eff6ff; 
+            color: var(--primary-color); 
+            font-weight: 600; 
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            flex: 1;
+            transition: all 0.2s;
         }
+        
         .btn-primary {
-            background: #3b82f6;
+            background: var(--primary-color);
             color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) { background: #2563eb; }
+        .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+        
+        .btn-secondary {
+            background: white;
+            color: var(--primary-color);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-secondary:hover { background: #f9fafb; }
+        
+        .btn-group { display: flex; gap: 12px; margin-top: 24px; }
+        
+        .score-circle {
+            width: 150px; height: 150px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 24px auto;
+            font-size: 36px;
+            font-weight: 700;
+            color: white;
+        }
+        
+        .score-good { background: var(--success-color); }
+        .score-medium { background: #f59e0b; }
+        .score-poor { background: var(--danger-color); }
+        
+        .dimension { margin-bottom: 20px; }
+        
+        .dimension-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        
+        .dimension-progress {
+            width: 100%; height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .dimension-fill {
+            height: 100%;
+            background: var(--primary-color);
+            transition: width 0.5s ease;
+        }
+        
+        .flags {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 24px; margin-top: 32px;
+        }
+        
+        .flag-section h3 {
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        
+        .flag {
+            padding: 12px; margin-bottom: 8px;
+            border-radius: 6px;
+            background: #f3f4f6;
+            font-size: 14px;
+        }
+        
+        .flag.green { background: #d1fae5; }
+        .flag.red { background: #fee2e2; }
+        
+        textarea {
+            width: 100%; padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        .retake-survey-btn {
+            margin-bottom: 16px;
         }
     </style>
 </head>
 <body>
-    <!-- CLERK AUTH WIDGET -->
-    <div id="clerk-auth" style="position: fixed; top: 20px; right: 20px;"></div>
-
-    <div class="container">
-        <div class="credit-bar" id="creditBar">
-            <div class="credits">Credits: <span id="creditCount">0</span></div>
-            <button class="account-btn" onclick="purchaseCredits()">Add Credits</button>
+    <!-- HEADER -->
+    <header>
+        <div class="logo">AOJA</div>
+        <div class="header-controls" id="headerControls">
+            <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
+            <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
         </div>
+    </header>
 
-        <div id="page-welcome" class="page active">
-            <h1>AOJA Job Scanner</h1>
-            <p>Trauma-informed job matching for ADHD & CPTSD professionals.</p>
-            <button class="btn btn-primary" onclick="startAssessment()">Start Free Scan</button>
-            <div id="user-info" style="margin-top: 20px;"></div>
-        </div>
-
-        <!-- Survey pages (add your 5 questions here) -->
-        <div id="page-survey" class="page">
-            <h2 id="questionTitle">Question 1 of 5</h2>
-            <div id="questionText" class="question-text"></div>
-            <div class="rating-scale" id="ratingScale"></div>
-            <div class="nav-buttons">
-                <button class="btn" onclick="prevQuestion()">Back</button>
-                <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()" disabled>Next</button>
+    <!-- MAIN CONTENT -->
+    <div id="app">
+        <!-- Welcome Page -->
+        <div class="page active" id="welcome">
+            <div class="container">
+                <h1>Trauma-Informed Job Scanner</h1>
+                <p style="margin-bottom: 24px;">For ADHD & CPTSD professionals. Find workplaces that work with your nervous system, not against it.</p>
+                <button class="btn btn-primary" onclick="navigate('survey')">Start Assessment</button>
             </div>
         </div>
 
-        <!-- Job input page -->
-        <div id="page-job" class="page">
-            <h2>Paste Job Description</h2>
-            <textarea id="jobDescription" rows="8" style="width: 100%; padding: 12px;"></textarea>
-            <div class="nav-buttons">
-                <button class="btn" onclick="resetApp()">Start Over</button>
-                <button class="btn btn-primary" onclick="scanJob()">Scan Job (1 Credit)</button>
+        <!-- Survey Page -->
+        <div class="page" id="survey">
+            <div class="container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="surveyProgress" style="width: 0%"></div>
+                </div>
+                
+                <div class="question-container" id="questionContainer"></div>
+                
+                <div class="btn-group">
+                    <button class="btn btn-secondary" id="prevBtn" onclick="previousQuestion()" style="display: none;">Previous</button>
+                    <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()" disabled>Next</button>
+                </div>
             </div>
         </div>
 
-        <!-- Results page -->
-        <div id="page-results" class="page">
-            <h1>AOJA Score: <span id="overallScore"></span></h1>
-            <div id="dimensionalScores"></div>
-            <div class="nav-buttons">
-                <button class="btn" onclick="resetApp()">Scan Another</button>
-                <button class="btn btn-primary" onclick="downloadReport()">Download Report</button>
+        <!-- Job Input Page -->
+        <div class="page" id="job">
+            <div class="container">
+                <h2>Paste Job Description</h2>
+                <textarea id="jobDescription" rows="12" placeholder="Paste the full job description here..."></textarea>
+                <button class="btn btn-primary" id="scanBtn" onclick="scanJob()" style="margin-top: 16px;">Scan Job (Free Preview)</button>
+                <button class="btn btn-primary" id="buyCreditsBtn" onclick="buyMoreCredits()" style="margin-top: 16px; display: none;">Buy More Credits</button>
+            </div>
+        </div>
+
+        <!-- Results Page -->
+        <div class="page" id="results">
+            <div class="container">
+                <h2>Job Analysis Results</h2>
+                
+                <div class="score-circle" id="overallScore">-</div>
+                <p style="text-align: center; margin-bottom: 32px;" id="scoreLabel">Overall Match</p>
+                
+                <h3>Dimensional Analysis</h3>
+                <div id="dimensionalScores"></div>
+                
+                <div class="flags">
+                    <div class="flag-section">
+                        <h3>🟢 Green Flags</h3>
+                        <div id="greenFlags"></div>
+                    </div>
+                    <div class="flag-section">
+                        <h3>🔴 Red Flags</h3>
+                        <div id="redFlags"></div>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary" id="downloadBtn" onclick="handleDownload()" style="margin-top: 24px;">
+                    <span id="downloadBtnText">Create An Account To Access Free Report</span>
+                </button>
+                
+                <button class="btn btn-secondary" onclick="navigate('job')" style="margin-left: 12px;">Scan Another Job</button>
+            </div>
+        </div>
+
+        <!-- Modules Container (for logged-in users) -->
+        <div id="modulesPage" class="page">
+            <div class="modules-container" id="modulesContainer">
+                <!-- Active module will be inserted here -->
+                <!-- Saved modules will be stacked below -->
             </div>
         </div>
     </div>
 
-    <!-- CLERK CDN -->
-    <script type="module">
-        import Clerk from 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@4/dist/clerk.browser.js';
-        
-        const clerkPubKey = 'pk_test_YYYYYYYYYYYYYYYYYYYYYYYY'; // YOUR FRONTEND KEY
-        
-        window.Clerk = new Clerk(clerkPubKey);
-        await window.Clerk.load({
-            frontendApi: 'adequate-lioness-36.clerk.accounts.dev'
-        });
-
-        // Render auth button
-        const authDiv = document.getElementById('clerk-auth');
-        if (window.Clerk.user) {
-            authDiv.innerHTML = `<button onclick="window.Clerk.signOut()">Sign Out</button>`;
-            document.getElementById('creditBar').classList.add('active');
-            fetchCredits(window.Clerk.user.id);
-        } else {
-            window.Clerk.mountSignIn(authDiv);
-        }
-
-        // Listen for auth changes
-        window.Clerk.addListener(({ user }) => {
-            if (user) {
-                localStorage.setItem('clerk_user_id', user.id);
-                document.getElementById('creditBar').classList.add('active');
-                fetchCredits(user.id);
-            } else {
-                localStorage.removeItem('clerk_user_id');
-                document.getElementById('creditBar').classList.remove('active');
-            }
-        });
-    </script>
-
     <script>
-        // ===== YOUR APPLICATION STATE =====
-        const appState = {
-            currentQuestion: 0,
-            traumaData: {},
-            userId: localStorage.getItem('clerk_user_id'),
-            credits: 0
-        };
-
+        // QUESTIONS DATA
         const questions = [
-            { key: 'safety_baseline', text: "I have never felt fundamentally safe at work." },
-            { key: 'adhd_wiring', text: "Execution tasks (repetitive, post-launch) deplete me within 3 months." },
-            { key: 'capability', text: "I discount my capabilities unless externally validated." },
-            { key: 'co_regulation', text: "I need co-regulation (trusted colleague) to feel stable." },
-            { key: 'financial', text: "Financial stress is actively crushing me." }
+            {
+                dimension: "safety_baseline",
+                title: "What's your relationship with authority figures?",
+                options: [
+                    { text: "I trust them", value: 1 },
+                    { text: "Mostly comfortable", value: 3 },
+                    { text: "It varies", value: 5 },
+                    { text: "Often anxious", value: 8 },
+                    { text: "I freeze up", value: 10 }
+                ]
+            },
+            {
+                dimension: "adhd_wiring",
+                title: "How do you work best?",
+                options: [
+                    { text: "Deep focus blocks", value: 1 },
+                    { text: "Flexible schedule", value: 3 },
+                    { text: "Some structure", value: 5 },
+                    { text: "Lots of meetings", value: 8 },
+                    { text: "Constant interruptions", value: 10 }
+                ]
+            },
+            {
+                dimension: "capability",
+                title: "How do you handle new challenges?",
+                options: [
+                    { text: "I thrive", value: 1 },
+                    { text: "I'm curious", value: 3 },
+                    { text: "Proceed cautiously", value: 5 },
+                    { text: "I need support", value: 8 },
+                    { text: "I panic", value: 10 }
+                ]
+            },
+            {
+                dimension: "co_regulation",
+                title: "What's your ideal team dynamic?",
+                options: [
+                    { text: "Collaborative", value: 1 },
+                    { text: "Supportive", value: 3 },
+                    { text: "Independent", value: 5 },
+                    { text: "Competitive", value: 8 },
+                    { text: "Isolated", value: 10 }
+                ]
+            },
+            {
+                dimension: "financial",
+                title: "How important is salary transparency?",
+                options: [
+                    { text: "Critical", value: 1 },
+                    { text: "Important", value: 3 },
+                    { text: "Nice to have", value: 5 },
+                    { text: "Not a priority", value: 8 },
+                    { text: "I avoid the topic", value: 10 }
+                ]
+            }
         ];
 
-        // ===== CREDIT MANAGEMENT =====
-        async function fetchCredits(userId) {
-            try {
-                const response = await fetch('/api/user/credits', {
-                    headers: { 'Authorization': `Bearer ${userId}` }
-                });
-                const data = await response.json();
-                appState.credits = data.credits;
-                document.getElementById('creditCount').textContent = data.credits;
-            } catch (e) {
-                console.error('Failed to fetch credits:', e);
-            }
+        // APP STATE
+        const appState = {
+            userId: null,
+            credits: 0,
+            survey: {},
+            currentQuestion: 0,
+            lastJobResult: null,
+            modules: [],           // All modules for user
+            activeModule: null,    // Current active module
+            clerkReady: false,
+            creditCost: 1
+        };
+
+        // HELPERS
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
         }
 
-        async function purchaseCredits() {
-            if (!appState.userId) {
-                alert('Please sign in first');
-                return;
-            }
-            
+        // CLERK INITIALIZATION - OFFICIAL PATTERN
+        window.addEventListener('load', async function() {
             try {
-                const response = await fetch('/api/create-checkout-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${appState.userId}`
-                    },
-                    body: JSON.stringify({ creditAmount: 1, price: 500 })
+                await window.Clerk.load();
+                
+                appState.clerkReady = true;
+                console.log("✅ Clerk loaded successfully");
+                
+                // Setup header controls
+                setupHeaderControls();
+                
+                // Listen for auth changes
+                window.Clerk.addListener(({ user }) => {
+                    handleAuthChange(user);
                 });
                 
-                const { sessionId } = await response.json();
+                // Initial auth check
+                if (window.Clerk.user) {
+                    handleAuthChange(window.Clerk.user);
+                }
                 
-                // Redirect to Stripe Checkout
-                const stripe = await loadStripe('pk_test_your_stripe_key');
-                await stripe.redirectToCheckout({ sessionId });
-            } catch (e) {
-                alert('Payment error: ' + e.message);
+            } catch (err) {
+                console.error("❌ Clerk load error:", err);
+            }
+        });
+
+        function setupHeaderControls() {
+            const headerControls = document.getElementById('headerControls');
+            const signInBtn = document.getElementById('signInBtn');
+            const signUpBtn = document.getElementById('signUpBtn');
+            
+            if (signInBtn) signInBtn.onclick = () => window.Clerk.openSignIn();
+            if (signUpBtn) signUpBtn.onclick = () => window.Clerk.openSignUp();
+            if (headerControls) headerControls.classList.remove('hidden');
+        }
+
+        function handleAuthChange(user) {
+            appState.userId = user?.id || null;
+            
+            const headerControls = document.getElementById('headerControls');
+            
+            if (user) {
+                // User is logged in
+                updateHeaderForAuthUser();
+                fetchCredits();
+                fetchModules();
+                navigate('modules');
+            } else {
+                // User is logged out
+                updateHeaderForGuest();
+                navigate('welcome');
+                // Clear stored modules
+                appState.modules = [];
+                appState.activeModule = null;
+                localStorage.removeItem('pendingModule');
             }
         }
 
-        // ===== SURVEY LOGIC =====
-        function startAssessment() {
-            document.getElementById('page-welcome').classList.remove('active');
-            document.getElementById('page-survey').classList.add('active');
-            showQuestion(0);
+        function updateHeaderForGuest() {
+            const headerControls = document.getElementById('headerControls');
+            headerControls.innerHTML = `
+                <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
+                <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
+            `;
+            setupHeaderControls();
         }
 
-        function showQuestion(index) {
-            appState.currentQuestion = index;
-            document.getElementById('questionTitle').textContent = `Question ${index + 1} of 5`;
-            document.getElementById('questionText').textContent = questions[index].text;
-            
-            const scale = document.getElementById('ratingScale');
-            scale.innerHTML = '';
-            
-            for (let i = 1; i <= 10; i++) {
-                const btn = document.createElement('button');
-                btn.className = 'rating-btn';
-                btn.textContent = i;
-                btn.onclick = () => selectAnswer(questions[index].key, i);
-                scale.appendChild(btn);
-            }
-            
-            const unableBtn = document.createElement('button');
-            unableBtn.className = 'rating-btn';
-            unableBtn.textContent = 'Unable to Assess';
-            unableBtn.onclick = () => selectAnswer(questions[index].key, null);
-            scale.appendChild(unableBtn);
+        function updateHeaderForAuthUser() {
+            const headerControls = document.getElementById('headerControls');
+            headerControls.innerHTML = `
+                <div class="credit-display" id="creditDisplay">Credits: <span id="creditValue">-</span></div>
+                <button class="btn btn-primary" id="buyCreditsHeaderBtn" onclick="buyMoreCredits()" style="padding: 8px 16px; font-size: 14px;">Buy More</button>
+                <button class="btn btn-secondary" onclick="signOutUser()" style="padding: 8px 16px; font-size: 14px;">Sign Out</button>
+            `;
         }
 
-        function selectAnswer(key, value) {
-            appState.traumaData[key] = value;
+        function signOutUser() {
+            window.Clerk.signOut();
+        }
+
+        // SURVEY RENDERING
+        function renderQuestion() {
+            const container = document.getElementById('questionContainer');
+            const question = questions[appState.currentQuestion];
+            const currentValue = appState.survey[question.dimension];
+            
+            container.innerHTML = `
+                <div class="question">
+                    <h2>Question ${appState.currentQuestion + 1} of ${questions.length}</h2>
+                    <h3 style="margin: 16px 0;">${question.title}</h3>
+                    <div class="options">
+                        ${question.options.map(opt => `
+                            <div class="option ${currentValue === opt.value ? 'selected' : ''}" 
+                                 data-value="${opt.value}"
+                                 onclick="selectOption('${question.dimension}', ${opt.value}, this)">
+                                ${opt.text}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            const progress = ((appState.currentQuestion + 1) / questions.length) * 100;
+            document.getElementById('surveyProgress').style.width = `${progress}%`;
+            
+            document.getElementById('prevBtn').style.display = 
+                appState.currentQuestion > 0 ? 'block' : 'none';
+            
+            const nextBtn = document.getElementById('nextBtn');
+            const isAnswered = currentValue !== undefined;
+            nextBtn.textContent = 
+                appState.currentQuestion === questions.length - 1 ? 'Complete Survey' : 'Next';
+            nextBtn.disabled = !isAnswered;
+        }
+
+        function selectOption(dimension, value, element) {
+            document.querySelectorAll('.option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            
+            element.classList.add('selected');
+            appState.survey[dimension] = value;
+            
             document.getElementById('nextBtn').disabled = false;
             
-            // Auto-save if user is signed in
-            if (appState.userId) {
-                fetch('/api/save-trauma-profile', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${appState.userId}`
-                    },
-                    body: JSON.stringify({ trauma: appState.traumaData })
-                });
-            }
+            console.log("✅ Survey updated:", appState.survey);
         }
 
         function nextQuestion() {
             if (appState.currentQuestion < questions.length - 1) {
-                showQuestion(appState.currentQuestion + 1);
-                document.getElementById('nextBtn').disabled = true;
+                appState.currentQuestion++;
+                renderQuestion();
             } else {
-                document.getElementById('page-survey').classList.remove('active');
-                document.getElementById('page-job').classList.add('active');
+                console.log("✅ Survey completed:", appState.survey);
+                completeSurvey();
             }
         }
 
-        // ===== JOB SCANNING =====
-        async function scanJob() {
-            const jobText = document.getElementById('jobDescription').value;
-            if (!jobText) {
-                alert('Please paste a job description');
-                return;
+        function completeSurvey() {
+            // Save survey to active module
+            if (appState.userId) {
+                // For logged-in users, create new active module in DB
+                createNewModule();
+            } else {
+                // For guests, save to localStorage
+                const pendingModule = {
+                    survey: appState.survey,
+                    created_at: new Date().toISOString()
+                };
+                localStorage.setItem('pendingModule', JSON.stringify(pendingModule));
             }
             
-            // Check credits
-            if (appState.userId && appState.credits <= 0) {
-                if (!confirm('No credits. Create free account for 5 free credits?')) {
-                    return;
-                }
-                // Clerk sign-up will trigger automatically
-                return;
-            }
+            navigate('job');
+        }
+
+        function createNewModule() {
+            // Deactivate old active module and create new one
+            supabase.table("modules").update({"is_active": false}).eq("user_id", appState.userId).eq("is_active", True).execute();
             
-            document.getElementById('page-job').classList.remove('active');
-            document.getElementById('page-results').classList.add('active');
+            supabase.table("modules").insert({
+                "user_id": appState.userId,
+                "survey_data": appState.survey,
+                "job_description": "",
+                "scan_results": null,
+                "is_active": true,
+                "created_at": new Date().toISOString(),
+                "completed_at": null
+            }).execute();
+        }
+
+        function previousQuestion() {
+            if (appState.currentQuestion > 0) {
+                appState.currentQuestion--;
+                renderQuestion();
+            }
+        }
+
+        // NAVIGATION
+        function navigate(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(page).classList.add('active');
+            
+            if (page === 'survey') {
+                appState.currentQuestion = 0;
+                renderQuestion();
+            } else if (page === 'modules') {
+                renderModules();
+            }
+        }
+
+        // CREDITS
+        async function fetchCredits() {
+            if (!appState.userId) return;
             
             try {
+                const token = await window.Clerk.session.getToken();
+                const response = await fetch('/api/user/credits', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to fetch credits');
+                
+                const data = await response.json();
+                appState.credits = data.credits;
+                updateCreditDisplay();
+            } catch (error) {
+                console.error("❌ Error fetching credits:", error);
+            }
+        }
+
+        function updateCreditDisplay() {
+            if (!appState.userId) return;
+            
+            const creditValue = document.getElementById('creditValue');
+            const creditDisplay = document.getElementById('creditDisplay');
+            
+            if (creditValue && creditDisplay) {
+                creditValue.textContent = appState.credits;
+                creditDisplay.classList.toggle('warning', appState.credits <= 2);
+            }
+        }
+
+        function updateScanButton() {
+            const scanBtn = document.getElementById('scanBtn');
+            const buyCreditsBtn = document.getElementById('buyCreditsBtn');
+            
+            if (!appState.userId) {
+                // Guest user
+                scanBtn.textContent = 'Scan Job (Free Preview)';
+                scanBtn.disabled = false;
+                scanBtn.style.display = 'block';
+                buyCreditsBtn.style.display = 'none';
+            } else if (appState.credits > 0) {
+                // Authenticated with credits
+                scanBtn.textContent = `Scan Job (1 Credit)`;
+                scanBtn.disabled = false;
+                scanBtn.style.display = 'block';
+                buyCreditsBtn.style.display = 'none';
+            } else {
+                // Authenticated, no credits
+                scanBtn.style.display = 'none';
+                buyCreditsBtn.style.display = 'block';
+            }
+        }
+
+        function updateDownloadButton() {
+            const downloadBtn = document.getElementById('downloadBtn');
+            const downloadBtnText = document.getElementById('downloadBtnText');
+            
+            if (!appState.userId) {
+                downloadBtnText.textContent = 'Create Free Account to Download Report';
+            } else if (appState.credits >= appState.creditCost) {
+                downloadBtnText.textContent = 'Download Report (1 Credit)';
+                downloadBtn.disabled = false;
+            } else {
+                downloadBtnText.textContent = 'Buy Credits to Download Report';
+                downloadBtn.disabled = true;
+            }
+        }
+
+        // JOB SCANNING
+        async function scanJob() {
+            const jobText = document.getElementById('jobDescription').value.trim();
+            if (!jobText) {
+                alert('Please paste a job description.');
+                return;
+            }
+
+            if (appState.userId && appState.credits <= 0) {
+                alert('No credits remaining. Please add credits to continue.');
+                return;
+            }
+
+            const scanBtn = document.getElementById('scanBtn');
+            scanBtn.disabled = true;
+            scanBtn.textContent = 'Scanning...';
+
+            try {
+                // Convert survey to TraumaInput
+                const traumaPayload = {
+                    safety_baseline: appState.survey.safety_baseline || 5,
+                    adhd_wiring: appState.survey.adhd_wiring || 5,
+                    capability: appState.survey.capability || 5,
+                    co_regulation: appState.survey.co_regulation || 5,
+                    financial: appState.survey.financial || 5
+                };
+
+                const token = appState.userId ? await window.Clerk.session.getToken() : null;
                 const response = await fetch('/api/scan-job', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': appState.userId ? `Bearer ${appState.userId}` : undefined
+                        ...(token && { 'Authorization': `Bearer ${token}` })
                     },
                     body: JSON.stringify({
+                        user_id: appState.userId,
+                        trauma: traumaPayload,
                         job_description: jobText,
-                        trauma: appState.traumaData,
                         consume_credit: !!appState.userId
                     })
                 });
-                
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+
                 const result = await response.json();
+                appState.lastJobResult = result;
+                
                 displayResults(result);
-            } catch (e) {
-                alert('Scan failed: ' + e.message);
+                navigate('results');
+                
+                if (appState.userId) {
+                    await fetchCredits();
+                    updateScanButton();
+                }
+            } catch (error) {
+                console.error('❌ Job scan error:', error);
+                alert('Job scanning failed: ' + error.message);
+            } finally {
+                updateScanButton();
             }
         }
 
+        // RESULTS DISPLAY
         function displayResults(result) {
-            document.getElementById('overallScore').textContent = result.overall_score.toFixed(1);
+            // Overall score
+            const scoreEl = document.getElementById('overallScore');
+            scoreEl.textContent = `${Math.round(result.overall_score)}%`;
+            scoreEl.className = `score-circle ${
+                result.overall_score >= 70 ? 'score-good' : 
+                result.overall_score >= 40 ? 'score-medium' : 'score-poor'
+            }`;
+
+            // Dimensional scores
+            const dimensionsEl = document.getElementById('dimensionalScores');
+            dimensionsEl.innerHTML = '';
+            result.dimensional_match.forEach(dim => {
+                dimensionsEl.innerHTML += `
+                    <div class="dimension">
+                        <div class="dimension-label">
+                            <span>${dim.dimension}</span>
+                            <span>${Math.round(dim.match_percentage)}%</span>
+                        </div>
+                        <div class="dimension-progress">
+                            <div class="dimension-fill" style="width: ${dim.match_percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Flags
+            const greenFlagsEl = document.getElementById('greenFlags');
+            const redFlagsEl = document.getElementById('redFlags');
             
-            const dimsContainer = document.getElementById('dimensionalScores');
-            dimsContainer.innerHTML = result.dimensional_match.map(dim => `
-                <div style="margin-bottom: 16px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <strong>${dim.dimension}</strong>
-                        <span>${dim.match_percentage}%</span>
-                    </div>
-                    <div style="width: 100%; background: #e5e7eb; height: 8px; border-radius: 4px;">
-                        <div style="width: ${dim.match_percentage}%; background: ${dim.critical ? '#ef4444' : dim.match_percentage < 75 ? '#f59e0b' : '#10b981'}; height: 8px; border-radius: 4px;"></div>
-                    </div>
-                    <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">${dim.risk_level}</div>
+            greenFlagsEl.innerHTML = result.green_flags.length > 0 
+                ? result.green_flags.map(f => `<div class="flag green">${f}</div>`).join('')
+                : '<div class="flag">No strong green flags detected</div>';
+                
+            redFlagsEl.innerHTML = result.red_flags.length > 0
+                ? result.red_flags.map(f => `<div class="flag red">${f}</div>`).join('')
+                : '<div class="flag">No major red flags detected</div>';
+            
+            updateDownloadButton();
+        }
+
+        // MODULES SYSTEM
+        async function fetchModules() {
+            if (!appState.userId) {
+                // Load from localStorage for guests
+                loadGuestModules();
+                return;
+            }
+            
+            try {
+                const token = await window.Clerk.session.getToken();
+                const response = await fetch('/api/user/modules', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to fetch modules');
+                
+                const data = await response.json();
+                appState.modules = data.modules || [];
+                renderModules();
+            } catch (error) {
+                console.error("❌ Error fetching modules:", error);
+            }
+        }
+
+        function loadGuestModules() {
+            const pending = localStorage.getItem('pendingModule');
+            if (pending) {
+                appState.modules = [JSON.parse(pending)];
+                appState.activeModule = appState.modules[0];
+                appState.survey = appState.activeModule.survey || {};
+            }
+            renderModules();
+        }
+
+        function renderModules() {
+            const container = document.getElementById('modulesContainer');
+            container.innerHTML = '';
+            
+            // Render Retake Survey button
+            if (appState.userId) {
+                container.innerHTML = '<button class="btn btn-primary retake-survey-btn" onclick="retakeSurvey()">Retake Survey</button>';
+            }
+            
+            // Render active module
+            if (appState.activeModule || appState.modules.length > 0) {
+                const activeMod = appState.activeModule || appState.modules.find(m => m.is_active) || appState.modules[0];
+                if (activeMod) {
+                    container.appendChild(renderModule(activeMod, true));
+                }
+            }
+            
+            // Render saved modules (excluding active)
+            appState.modules.filter(m => !m.is_active).forEach(mod => {
+                container.appendChild(renderModule(mod, false));
+            });
+        }
+
+        function renderModule(moduleData, isActive = false) {
+            const moduleDiv = document.createElement('div');
+            moduleDiv.className = `module ${isActive ? 'active' : 'saved'}`;
+            
+            const completedAt = moduleData.completed_at || moduleData.created_at;
+            
+            moduleDiv.innerHTML = `
+                <div class="module-header">
+                    <div class="module-title">${isActive ? 'Current Analysis' : 'Previous Analysis'}</div>
+                </div>
+                
+                <div class="survey-results-panel">
+                    <h4>Survey Responses</h4>
+                    ${renderSurveyResults(moduleData.survey_data || moduleData.survey)}
+                </div>
+                
+                <div class="job-description-section" style="margin: 20px 0;">
+                    <h4>Job Description</h4>
+                    <p style="font-size: 13px; color: #6b7280; white-space: pre-wrap;">${moduleData.job_description || 'No job description scanned yet.'}</p>
+                </div>
+                
+                ${moduleData.scan_results ? renderResultsPreview(moduleData.scan_results) : ''}
+                
+                <div class="module-date">${formatDate(completedAt)}</div>
+            `;
+            
+            return moduleDiv;
+        }
+
+        function renderSurveyResults(survey) {
+            if (!survey) return '<p style="font-size: 13px; color: #6b7280;">No survey data.</p>';
+            
+            const labels = {
+                safety_baseline: "Safety Baseline",
+                adhd_wiring: "ADHD Wiring",
+                capability: "Capability",
+                co_regulation: "Co-Regulation",
+                financial: "Financial"
+            };
+            
+            return Object.entries(survey).map(([key, value]) => `
+                <div class="survey-result-item">
+                    <span>${labels[key] || key}:</span>
+                    <span style="font-weight: 600;">${value}/10</span>
                 </div>
             `).join('');
         }
 
-        function resetApp() {
-            location.reload();
+        function renderResultsPreview(results) {
+            if (!results) return '';
+            
+            return `
+                <div style="margin: 20px 0;">
+                    <h4>Scan Results</h4>
+                    <p style="font-size: 24px; font-weight: 700; color: var(--primary-color); margin: 8px 0;">
+                        ${Math.round(results.overall_score || 0)}% Match
+                    </p>
+                    <button class="btn btn-primary" onclick="viewFullResults('${results.id}')" style="font-size: 14px; padding: 8px 16px;">
+                        View Full Results
+                    </button>
+                </div>
+            `;
         }
 
-        // ===== STRIPE LOAD HELPER =====
-        async function loadStripe(key) {
-            const script = document.createElement('script');
-            script.src = 'https://js.stripe.com/v3/';
-            script.async = true;
-            document.head.appendChild(script);
-            await new Promise(resolve => script.onload = resolve);
-            return window.Stripe(key);
+        function viewFullResults(moduleId) {
+            const module = appState.modules.find(m => m.id === moduleId);
+            if (module) {
+                appState.activeModule = module;
+                appState.survey = module.survey_data || module.survey || {};
+                appState.lastJobResult = module.scan_results;
+                displayResults(module.scan_results);
+                navigate('results');
+            }
         }
+
+        async function retakeSurvey() {
+            if (!appState.userId) {
+                alert('Please sign in to retake survey.');
+                return;
+            }
+            
+            // Deactivate current module
+            if (appState.activeModule?.id) {
+                supabase.table("modules").update({"is_active": false}).eq("id", appState.activeModule.id).execute();
+            }
+            
+            // Start new survey
+            appState.survey = {};
+            appState.currentQuestion = 0;
+            appState.lastJobResult = null;
+            
+            // Create new active module
+            createNewModule();
+            
+            navigate('survey');
+        }
+
+        // DOWNLOAD HANDLING
+        async function handleDownload() {
+            if (!appState.userId) {
+                if (confirm('Create a free account to access your personalized report?')) {
+                    window.Clerk.openSignUp();
+                }
+                return;
+            }
+            
+            if (appState.credits <= 0) {
+                if (confirm('No credits remaining. Add credits to download reports?')) {
+                    buyMoreCredits();
+                }
+                return;
+            }
+            
+            downloadReport();
+        }
+
+        function downloadReport() {
+            if (!appState.lastJobResult) {
+                alert('No report available. Please scan a job first.');
+                return;
+            }
+
+            const report = {
+                scanned_at: new Date().toISOString(),
+                user_id: appState.userId,
+                survey_responses: appState.survey,
+                ...appState.lastJobResult
+            };
+
+            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `job-analysis-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            // Deduct credit after download
+            if (appState.userId) {
+                appState.credits--;
+                updateCreditDisplay();
+                updateDownloadButton();
+            }
+        }
+
+        // STRIPE INTEGRATION
+        async function buyMoreCredits() {
+            if (!appState.userId) {
+                alert('Please sign in to buy credits.');
+                return;
+            }
+            
+            try {
+                const token = await window.Clerk.session.getToken();
+                const response = await fetch('/api/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ credits_to_purchase: 1 }) // User selects quantity in Stripe UI
+                });
+                
+                if (!response.ok) throw new Error('Failed to create checkout session');
+                
+                const { sessionId } = await response.json();
+                
+                // Redirect to Stripe Checkout
+                const stripe = await loadStripe('pk_live_realoneloaded'); // Your Stripe publishable key
+                await stripe.redirectToCheckout({ sessionId });
+                
+            } catch (error) {
+                console.error('❌ Stripe error:', error);
+                alert('Failed to start checkout: ' + error.message);
+            }
+        }
+
+        // Load Stripe.js
+        function loadStripe(publishableKey) {
+            return new Promise((resolve) => {
+                const script = document.createElement('script');
+                script.src = 'https://js.stripe.com/v3/';
+                script.onload = () => resolve(window.Stripe(publishableKey));
+                document.head.appendChild(script);
+            });
+        }
+
+        // Handle payment success
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('payment') === 'success') {
+                // Clear URL params
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Reload credits and modules
+                if (appState.userId) {
+                    fetchCredits();
+                    fetchModules();
+                }
+                
+                alert('✅ Credits purchased successfully!');
+            }
+        });
     </script>
 </body>
 </html>

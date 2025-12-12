@@ -1,30 +1,55 @@
-# main.py - Use this EXACT file
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+# ===== IMPORTS =====
+from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from supabase import create_client, Client
+from pathlib import Path
+from dotenv import load_dotenv
 import stripe
+import jwt
+from jwt import PyJWKClient
 import os
 from datetime import datetime
 
 # ===== ENVIRONMENT CONFIGURATION =====
-# Secrets are loaded from environment variables (NEVER hardcoded)
-# For local development: create a backend/.env file
-# For production: set vars in Vercel dashboard
+load_dotenv(Path(__file__).parent.parent / ".env")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://your-project.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "your-service-key-here")
-CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY", "FALLBACK_FOR_LOCAL_DEV_ONLY")
-CLERK_WEBHOOK_SECRET = os.getenv("CLERK_WEBHOOK_SECRET", "FALLBACK_FOR_LOCAL_DEV_ONLY")
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "FALLBACK_FOR_LOCAL_DEV_ONLY")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "FALLBACK_FOR_LOCAL_DEV_ONLY")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY")
+CLERK_WEBHOOK_SECRET = os.getenv("CLERK_WEBHOOK_SECRET")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8000")
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = os.getenv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
+
+# Validate critical env vars
+required_secrets = ["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "CLERK_SECRET_KEY"]
+for var in required_secrets:
+    if not os.getenv(var):
+        print(f"⚠️ WARNING: {var} not set!")
 
 # Initialize clients
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 stripe.api_key = STRIPE_SECRET_KEY
 
 app = FastAPI()
+
+# ===== CORS FOR CODESPACES =====
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        FRONTEND_URL,
+        "https://fuzzy-space-dollop-gg555q4wgr5hpvr6-8000.app.github.dev",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ===== DATA MODELS =====
 class TraumaInput(BaseModel):
@@ -37,7 +62,9 @@ class TraumaInput(BaseModel):
 class JobScanRequest(BaseModel):
     job_description: str
     trauma: TraumaInput
+    user_id: Optional[str] = None
     consume_credit: bool = True
+    module_id: Optional[str] = None  # For updating existing module
 
 class VectorScore(BaseModel):
     dimension: str
@@ -60,10 +87,10 @@ class JobScanResponse(BaseModel):
     credit_cost: int = 1
     preview_mode: bool = False
 
-# ===== CLERK AUTHENTICATION (Using YOUR JWKS) =====
-import jwt
-from jwt import PyJWKClient
+class StripeCheckoutRequest(BaseModel):
+    credits_to_purchase: int = Field(..., ge=1, le=100)
 
+# ===== CLERK AUTHENTICATION =====
 JWKS_URL = "https://adequate-lioness-36.clerk.accounts.dev/.well-known/jwks.json"
 jwks_client = PyJWKClient(JWKS_URL)
 
@@ -76,19 +103,13 @@ async def get_clerk_user(authorization: Optional[str] = Header(None)):
         token = authorization.replace("Bearer ", "")
         signing_key = jwks_client.get_signing_key_from_jwt(token)
         
-        # Decode without verification first to get kid
-        unverified = jwt.decode(token, options={"verify_signature": False})
-        
-        # Verify signature
         data = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=None,  # Clerk sets audience automatically
             options={"verify_exp": True}
         )
         
-        # Return Clerk user ID
         return data.get("sub")
     except Exception as e:
         print(f"Auth error: {e}")
@@ -111,7 +132,12 @@ async def deduct_credit(user_id: str) -> bool:
     }).eq("user_id", user_id).execute()
     return True
 
-# ===== YOUR SCORING ALGORITHM (UNCHANGED) =====
+async def add_credits(user_id: str, amount: int):
+    supabase.table("users").update({
+        "credits_remaining": supabase.raw(f"credits_remaining + {amount}")
+    }).eq("user_id", user_id).execute()
+
+# ===== VECTOR SCORING ALGORITHM =====
 def calculate_vector_score(job_text: str, trauma: TraumaInput) -> dict:
     """Your trauma-informed scoring logic."""
     job = job_text.lower()
@@ -126,7 +152,7 @@ def calculate_vector_score(job_text: str, trauma: TraumaInput) -> dict:
         "Financial Security": 0.10
     }
     
-    # ===== DIMENSION 1: SAFETY =====
+    # Safety dimension
     safety_base = 50.0
     if "remote-first" in job:
         safety_base += 30 * (11 - trauma.safety_baseline) / 10
@@ -135,32 +161,35 @@ def calculate_vector_score(job_text: str, trauma: TraumaInput) -> dict:
         safety_base -= 40 * (11 - trauma.safety_baseline) / 10
         red_flags.append("On-site requirement")
     
-    # ===== DIMENSION 2: ADHD =====
+    # ADHD dimension
     adhd_base = 50.0
-    if "never touch post-launch" in job:
-        adhd_base += 50 * (11 - trauma.adhd_wiring) / 10
-        green_flags.append("Explicit handoff")
-    if "execution" in job and "strategy" not in job:
-        adhd_base -= 25 * (11 - trauma.adhd_wiring) / 10
-        red_flags.append("Execution focus")
+    if "deep work" in job or "focus time" in job:
+        adhd_base += 40 * (11 - trauma.adhd_wiring) / 10
+        green_flags.append("Deep work protected")
+    if "fast-paced" in job or "multitasking" in job:
+        adhd_base -= 30 * (11 - trauma.adhd_wiring) / 10
+        red_flags.append("High context switching")
     
-    # ===== DIMENSION 3: CAPABILITY =====
+    # Capability dimension
     capability_base = 50.0
-    if "strategy" in job or "automation" in job:
+    if "automation" in job or "strategy" in job:
         capability_base += 35
-        green_flags.append("Strategy/automation")
+        green_flags.append("Strategic/automation focus")
     
-    # ===== DIMENSION 4: CO-REGULATION =====
+    # Co-regulation dimension
     coreg_base = 50.0
-    if "collaborative" in job:
+    if "collaborative" in job or "team-oriented" in job:
         coreg_base += 20 * (11 - trauma.co_regulation) / 10
-        green_flags.append("Collaborative team")
+        green_flags.append("Collaborative culture")
+    if "independent" in job and "team" not in job:
+        coreg_base -= 15 * (11 - trauma.co_regulation) / 10
+        red_flags.append("Potentially isolated")
     
-    # ===== DIMENSION 5: FINANCIAL =====
+    # Financial dimension
     financial_base = 50.0
-    if "equity" in job:
-        financial_base += 30 * (11 - trauma.financial) / 10
-        green_flags.append("Equity compensation")
+    if "transparent pay" in job or "salary range" in job:
+        financial_base += 25 * (11 - trauma.financial) / 10
+        green_flags.append("Salary transparency")
     
     dimensions = {
         "Safety Baseline": max(0, min(100, safety_base)),
@@ -171,12 +200,10 @@ def calculate_vector_score(job_text: str, trauma: TraumaInput) -> dict:
     }
     
     total_score = sum(dimensions[dim] * weights[dim] for dim in dimensions)
-    
-    # Risk level
     risk = "red" if total_score < 50 else "yellow" if total_score < 75 else "green"
     summary = "Safe for your pattern" if risk == "green" else "Proceed with caution" if risk == "yellow" else "Predicted collapse"
     
-    # Vector scores
+    # Build vector scores
     vector_scores = []
     critical_gaps = []
     negotiation_priorities = []
@@ -222,95 +249,84 @@ async def scan_job_endpoint(
     request: JobScanRequest,
     authorization: Optional[str] = Header(None)
 ):
+    """Scan job with credit deduction and module management."""
     user_id = await get_clerk_user(authorization)
     is_preview = not user_id or not request.consume_credit
     
+    # Deduct credit if authenticated
     if user_id and request.consume_credit:
         if not await deduct_credit(user_id):
             raise HTTPException(status_code=402, detail="No credits remaining")
     
+    # Calculate results
     result = calculate_vector_score(request.job_description, request.trauma)
     result["preview_mode"] = is_preview
     
-    if user_id and request.consume_credit:
-        supabase.table("scans").insert({
+    # Save to module
+    if user_id:
+        module_data = {
             "user_id": user_id,
+            "survey_data": request.trauma.dict(),
             "job_description": request.job_description,
-            "trauma_profile": request.trauma.dict(),
-            "vector_result": result,
-            "created_at": datetime.utcnow().isoformat()
-        }).execute()
+            "scan_results": result,
+            "completed_at": datetime.utcnow().isoformat(),
+            "is_active": True
+        }
+        
+        # Deactivate old active module
+        supabase.table("modules").update({"is_active": False}).eq("user_id", user_id).eq("is_active", True).execute()
+        
+        # Insert new module
+        supabase.table("modules").insert(module_data).execute()
     
     return JobScanResponse(**result)
 
 @app.post("/api/create-checkout-session")
 async def create_checkout_session(
-    request: dict,
+    request: StripeCheckoutRequest,
     authorization: Optional[str] = Header(None)
 ):
-    """Create Stripe Checkout for YOUR $5 product."""
+    """Create Stripe Checkout for credit purchases."""
     user_id = await get_clerk_user(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get or create Stripe customer
+    user_response = supabase.table("users").select("stripe_customer_id").eq("user_id", user_id).execute()
+    customer_id = None
+    if user_response.data and user_response.data[0].get("stripe_customer_id"):
+        customer_id = user_response.data[0]["stripe_customer_id"]
+    else:
+        # Create new customer
+        customer = stripe.Customer.create(
+            email=supabase.table("users").select("email").eq("user_id", user_id).execute().data[0]["email"],
+            metadata={"clerk_user_id": user_id}
+        )
+        customer_id = customer.id
+        supabase.table("users").update({"stripe_customer_id": customer_id}).eq("user_id", user_id).execute()
     
     try:
         session = stripe.checkout.Session.create(
             line_items=[{
                 'price_data': {
                     'currency': 'usd',
-                    'product': 'prod_TaTAljVeSrKAXZ',  # YOUR PRODUCT ID
-                    'unit_amount': 500,  # $5.00 in cents
+                    'unit_amount': 500,  # $5.00 per credit
+                    'product_data': {
+                        'name': f'{request.credits_to_purchase} Credit(s)',
+                        'description': 'AOJA Job Scan Credits'
+                    },
                 },
-                'quantity': 1,
+                'quantity': request.credits_to_purchase,
             }],
             mode='payment',
-            client_reference_id=user_id,  # Link to Clerk user
+            client_reference_id=user_id,
+            customer=customer_id,
             success_url=f'{FRONTEND_URL}?payment=success',
             cancel_url=f'{FRONTEND_URL}?payment=cancelled',
         )
         return {"sessionId": session.id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/webhooks/clerk")
-async def clerk_webhook(request: Request):
-    """Auto-provision 5 credits on sign-up."""
-    payload = await request.json()
-    
-    if payload.get("type") == "user.created":
-        user_id = payload["data"]["id"]
-        supabase.table("users").insert({
-            "user_id": user_id,
-            "credits_remaining": 5,
-            "created_at": datetime.utcnow().isoformat()
-        }).execute()
-    
-    return {"success": True}
-
-@app.post("/webhooks/stripe")
-async def stripe_webhook(request: Request):
-    """Grant credits after payment."""
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
-    
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
-        )
-        
-        if event["type"] == "checkout.session.completed":
-            session = event["data"]["object"]
-            user_id = session["client_reference_id"]
-            
-            # Add 1 credit per $5
-            supabase.rpc("increment_credits", {
-                "user_id": user_id,
-                "amount": 1
-            }).execute()
-        
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/user/credits")
 async def get_credits(authorization: Optional[str] = Header(None)):
@@ -324,7 +340,91 @@ async def get_credits(authorization: Optional[str] = Header(None)):
         return {"credits": response.data[0]["credits_remaining"], "user_id": user_id}
     return {"credits": 0, "user_id": user_id}
 
-@app.get("/")
+@app.get("/api/user/modules")
+async def get_modules(authorization: Optional[str] = Header(None)):
+    """Get all modules for user."""
+    user_id = await get_clerk_user(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    response = supabase.table("modules").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    return {"modules": response.data or []}
+
+@app.post("/api/user/retake-survey")
+async def retake_survey(authorization: Optional[str] = Header(None)):
+    """Start new module (retake survey)."""
+    user_id = await get_clerk_user(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Deactivate current active module
+    supabase.table("modules").update({"is_active": False}).eq("user_id", user_id).eq("is_active", True).execute()
+    
+    return {"success": True}
+
+@app.post("/webhooks/clerk")
+async def clerk_webhook(request: Request):
+    """Auto-provision 5 credits and create first module on sign-up."""
+    payload = await request.json()
+    
+    if payload.get("type") == "user.created":
+        user_id = payload["data"]["id"]
+        
+        # Create user record with 5 credits
+        supabase.table("users").insert({
+            "user_id": user_id,
+            "credits_remaining": 5,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+    
+    return {"success": True}
+
+@app.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    """Grant credits after payment and handle module transfers."""
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+        
+        if event["type"] == "checkout.session.completed":
+            session = event["data"]["object"]
+            user_id = session["client_reference_id"]
+            credits_purchased = session["line_items"]["data"][0]["quantity"]
+            
+            # Add credits
+            await add_credits(user_id, credits_purchased)
+            
+            # Check for pending localStorage module transfer
+            # This will be handled in frontend on payment success
+        
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    with open("index.html", "r") as f:
-        return f.read()
+    """Serve frontend with dynamic environment injection."""
+    frontend_path = Path(__file__).parent.parent / "frontend" / "index.html"
+    
+    with open(frontend_path, "r") as f:
+        html_content = f.read()
+    
+    # Inject public keys
+    html_content = html_content.replace(
+        'data-clerk-publishable-key=""',
+        f'data-clerk-publishable-key="{NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}"'
+    )
+    
+    return HTMLResponse(content=html_content)
+
+@app.get("/{full_path:path}")
+async def serve_frontend_catch_all(full_path: str):
+    """Catch-all for SPA routing."""
+    if full_path.startswith("api/") or full_path.startswith("webhooks/"):
+        return None
+    
+    return await serve_frontend()

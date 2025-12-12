@@ -1,21 +1,18 @@
-# /backend/requirements.txt - Paste this EXACT content
-
+# requirements.txt
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-supabase==2.0.3
+supabase==2.25.0
 stripe==7.8.0
-clerk-backend-api==0.3.0
 
-# NEW: Required for Clerk JWT verification
-PyJWT==2.8.0
-pyjwt[crypto]==2.8.0  # Adds cryptography for RS256 signatures
+# UPDATED: Use latest stable version
+clerk-backend-api==4.2.0
 
-# NEW: Required for JWKS (JSON Web Key Set) fetching
+# Required for Clerk JWT verification
+PyJWT
 python-jose[cryptography]==3.3.0
+# Remove the strict httpx pin to let pip resolve the conflict
+httpx 
 
-# NEW: For Clerk API calls
-httpx==0.25.2
-
-# Existing utilities
+# Utilities
 python-dotenv==1.0.0
-pydantic==2.5.0
+pydantic
