@@ -369,7 +369,21 @@
                 minute: '2-digit'
             });
         }
+         // ✅ NEW: Survey state management functions
+        function saveSurveyProgress() {
+            const surveyState = {
+                survey: appState.survey,
+                currentQuestion: appState.currentQuestion,
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem('pendingSurvey', JSON.stringify(surveyState));
+            console.log("✅ Survey progress saved");
+        }
 
+        function clearSurveyProgress() {
+            localStorage.removeItem('pendingSurvey');
+            console.log("✅ Survey progress cleared");
+        }
         // QUESTIONS DATA
         const questions = [
             {
@@ -490,12 +504,31 @@
             }
         });
 
-        async function handleAuthSuccess(user) {
+       async function handleAuthSuccess(user) {
             appState.userId = user.id;
             await fetchCredits();
             await fetchModules();
             updateHeaderForAuthUser();
-            navigate('modulesPage'); // FIXED: Use correct ID
+            
+            // ✅ NEW: Check if user has an active survey workflow
+            const hasPendingSurvey = localStorage.getItem('pendingSurvey');
+            const hasActiveModule = appState.modules.find(m => m.is_active);
+            
+            if (hasPendingSurvey) {
+                // Continue existing survey
+                const pending = JSON.parse(hasPendingSurvey);
+                appState.survey = pending.survey || {};
+                appState.currentQuestion = pending.currentQuestion || 0;
+                navigate('survey');
+            } else if (hasActiveModule) {
+                // Show modules if user has active workflow
+                navigate('modulesPage');
+            } else {
+                // Start fresh survey
+                appState.survey = {};
+                appState.currentQuestion = 0;
+                navigate('survey');
+            }
         }
 
         function handleAuthChange(user) {
@@ -599,6 +632,7 @@
             nextBtn.disabled = !isAnswered;
         }
 
+        // AFTER (new version):
         function selectOption(dimension, value, element) {
             document.querySelectorAll('.option').forEach(opt => {
                 opt.classList.remove('selected');
@@ -607,6 +641,9 @@
             element.classList.add('selected');
             appState.survey[dimension] = value;
             document.getElementById('nextBtn').disabled = false;
+            
+            // ✅ NEW: Save progress
+            saveSurveyProgress();
             console.log("✅ Survey updated:", appState.survey);
         }
 
@@ -621,6 +658,8 @@
         }
 
         function completeSurvey() {
+            clearSurveyProgress(); // ✅ Clear saved progress
+            
             if (appState.userId) {
                 createNewModule();
             } else {
@@ -1031,6 +1070,9 @@
             appState.survey = {};
             appState.currentQuestion = 0;
             appState.lastJobResult = null;
+            
+            // ✅ NEW: Clear any saved progress
+            clearSurveyProgress();
             
             createNewModule();
             navigate('survey');
