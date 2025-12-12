@@ -364,18 +364,28 @@ async def retake_survey(authorization: Optional[str] = Header(None)):
 
 @app.post("/webhooks/clerk")
 async def clerk_webhook(request: Request):
-    """Auto-provision 5 credits and create first module on sign-up."""
+    """Auto-provision 5 credits and create user record on sign-up."""
     payload = await request.json()
     
     if payload.get("type") == "user.created":
         user_id = payload["data"]["id"]
         
+        # Get email from payload (safely)
+        email_addresses = payload["data"].get("email_addresses", [])
+        primary_email = "user@unknown.com"  # Fallback - will be updated by Clerk sync
+        
+        if email_addresses and len(email_addresses) > 0:
+            primary_email = email_addresses[0].get("email_address", primary_email)
+        
         # Create user record with 5 credits
         supabase.table("users").insert({
             "user_id": user_id,
             "credits_remaining": 5,
+            "email": primary_email,
             "created_at": datetime.utcnow().isoformat()
         }).execute()
+        
+        print(f"✅ Created user {user_id} ({primary_email}) with 5 credits")
     
     return {"success": True}
 
@@ -413,10 +423,18 @@ async def serve_frontend():
     with open(frontend_path, "r") as f:
         html_content = f.read()
     
-    # Inject public keys
+    # Inject Clerk publishable key
+    clerk_key = NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY or 'your_fallback_key'
     html_content = html_content.replace(
         'data-clerk-publishable-key=""',
-        f'data-clerk-publishable-key="{NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}"'
+        f'data-clerk-publishable-key="{clerk_key}"'
+    )
+    
+    # Inject Stripe publishable key for JavaScript
+    stripe_key = os.getenv("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY", "")
+    html_content = html_content.replace(
+        "window.STRIPE_PUBLISHABLE_KEY = '%%STRIPE_PUBLISHABLE_KEY%%';",
+        f"window.STRIPE_PUBLISHABLE_KEY = '{stripe_key}';"
     )
     
     return HTMLResponse(content=html_content)

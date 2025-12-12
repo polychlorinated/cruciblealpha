@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AOJA - Trauma-Informed Job Scanner</title>
-    
+    <script>
+    // Injected by FastAPI from .env
+    window.STRIPE_PUBLISHABLE_KEY = '%%STRIPE_PUBLISHABLE_KEY%%';
+    </script>  
     <!-- OFFICIAL CLERK PATTERN -->
     <script
         async
@@ -434,32 +437,81 @@
             });
         }
 
-        // CLERK INITIALIZATION - OFFICIAL PATTERN
-        window.addEventListener('load', async function() {
-            try {
-                await window.Clerk.load();
-                
-                appState.clerkReady = true;
-                console.log("✅ Clerk loaded successfully");
-                
-                // Setup header controls
-                setupHeaderControls();
-                
-                // Listen for auth changes
-                window.Clerk.addListener(({ user }) => {
-                    handleAuthChange(user);
-                });
-                
-                // Initial auth check
-                if (window.Clerk.user) {
-                    handleAuthChange(window.Clerk.user);
-                }
-                
-            } catch (err) {
-                console.error("❌ Clerk load error:", err);
-            }
-        });
+        // CLERK INITIALIZATION - FIXED WITH PROPER STATE MANAGEMENT
+            let clerkInitStarted = false;
 
+            window.addEventListener('load', async function() {
+                if (clerkInitStarted) return;
+                clerkInitStarted = true;
+                
+                console.log("🔄 Initializing Clerk...");
+                
+                try {
+                    // Wait for Clerk to be ready
+                    const checkClerk = setInterval(() => {
+                        if (window.Clerk && window.Clerk.load) {
+                            clearInterval(checkClerk);
+                            loadClerk();
+                        }
+                    }, 100);
+                    
+                    async function loadClerk() {
+                        await window.Clerk.load();
+                        
+                        appState.clerkReady = true;
+                        console.log("✅ Clerk loaded successfully");
+                        
+                        // Check actual auth state
+                        const user = window.Clerk.user;
+                        
+                        if (user) {
+                            console.log("✅ User already signed in:", user.id);
+                            await handleAuthSuccess(user);
+                        } else {
+                            console.log("⏳ No user signed in, showing welcome page");
+                            handleAuthChange(null);
+                        }
+                        
+                        // Listen for auth changes
+                        window.Clerk.addListener(async ({ user }) => {
+                            console.log("👤 Auth state changed:", user ? user.id : 'null');
+                            if (user) {
+                                await handleAuthSuccess(user);
+                            } else {
+                                handleAuthChange(null);
+                            }
+                        });
+                    }
+                    
+                } catch (err) {
+                    console.error("❌ Clerk initialization error:", err);
+                    handleAuthChange(null);
+                }
+            });
+
+            async function handleAuthSuccess(user) {
+                appState.userId = user.id;
+                await fetchCredits(); // Force immediate credit fetch
+                await fetchModules(); // Load modules immediately
+                updateHeaderForAuthUser();
+                renderModules();
+                navigate('modules');
+            }
+
+            function handleAuthChange(user) {
+                appState.userId = user?.id || null;
+                
+                if (user) {
+                    handleAuthSuccess(user);
+                } else {
+                    // Logged out state
+                    updateHeaderForGuest();
+                    navigate('welcome');
+                    appState.modules = [];
+                    appState.activeModule = null;
+                    localStorage.removeItem('pendingModule');
+                }
+            }
         function setupHeaderControls() {
             const headerControls = document.getElementById('headerControls');
             const signInBtn = document.getElementById('signInBtn');
@@ -494,11 +546,17 @@
 
         function updateHeaderForGuest() {
             const headerControls = document.getElementById('headerControls');
+            if (!headerControls) return;
+            
+            // Only show auth buttons, hide everything else
             headerControls.innerHTML = `
                 <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
                 <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
             `;
-            setupHeaderControls();
+            
+            // Add click handlers
+            document.getElementById('signInBtn').onclick = () => window.Clerk.openSignIn();
+            document.getElementById('signUpBtn').onclick = () => window.Clerk.openSignUp();
         }
 
         function updateHeaderForAuthUser() {
@@ -1010,6 +1068,13 @@
                 return;
             }
             
+            // Get Stripe key from environment (injected by backend)
+            const stripePublishableKey = window.STRIPE_PUBLISHABLE_KEY || 'pk_live_realoneloaded';
+            
+            if (!window.Stripe) {
+                await loadStripe(stripePublishableKey);
+            }
+            
             try {
                 const token = await window.Clerk.session.getToken();
                 const response = await fetch('/api/create-checkout-session', {
@@ -1018,20 +1083,25 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ credits_to_purchase: 1 }) // User selects quantity in Stripe UI
+                    body: JSON.stringify({ credits_to_purchase: 1 })
                 });
                 
-                if (!response.ok) throw new Error('Failed to create checkout session');
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorData}`);
+                }
                 
                 const { sessionId } = await response.json();
                 
-                // Redirect to Stripe Checkout
-                const stripe = await loadStripe('pk_live_realoneloaded'); // Your Stripe publishable key
-                await stripe.redirectToCheckout({ sessionId });
+                // Redirect to Stripe
+                const stripe = window.Stripe(stripePublishableKey);
+                const { error } = await stripe.redirectToCheckout({ sessionId });
+                
+                if (error) throw new Error(error.message);
                 
             } catch (error) {
                 console.error('❌ Stripe error:', error);
-                alert('Failed to start checkout: ' + error.message);
+                alert(`Failed to start checkout: ${error.message}`);
             }
         }
 
