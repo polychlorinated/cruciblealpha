@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AOJA - Trauma-Informed Job Scanner</title>
+    
+    <!-- Injected by FastAPI from .env - DO NOT MODIFY THIS LINE -->
     <script>
-    // Injected by FastAPI from .env
-    window.STRIPE_PUBLISHABLE_KEY = '%%STRIPE_PUBLISHABLE_KEY%%';
-    </script>  
+        window.STRIPE_PUBLISHABLE_KEY = 'INJECT_ME';
+    </script>
+    
     <!-- OFFICIAL CLERK PATTERN -->
     <script
         async
@@ -356,6 +358,18 @@
     </div>
 
     <script>
+        // SAFE DATE FORMATTER - Add this at top
+        function formatDate(dateString) {
+            if (!dateString) return 'No date';
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
         // QUESTIONS DATA
         const questions = [
             {
@@ -428,90 +442,113 @@
             creditCost: 1
         };
 
-        // HELPERS
-        function formatDate(dateString) {
-            return new Date(dateString).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-        }
+        // CLERK INITIALIZATION - SINGLE, CLEAN VERSION
+        let clerkInitStarted = false;
 
-        // CLERK INITIALIZATION - FIXED WITH PROPER STATE MANAGEMENT
-            let clerkInitStarted = false;
-
-            window.addEventListener('load', async function() {
-                if (clerkInitStarted) return;
-                clerkInitStarted = true;
+        window.addEventListener('load', async function() {
+            if (clerkInitStarted) return;
+            clerkInitStarted = true;
+            
+            console.log("🔄 Initializing Clerk...");
+            
+            try {
+                // Wait for Clerk script to load
+                const checkClerk = setInterval(() => {
+                    if (window.Clerk && window.Clerk.load) {
+                        clearInterval(checkClerk);
+                        loadClerk();
+                    }
+                }, 100);
                 
-                console.log("🔄 Initializing Clerk...");
-                
-                try {
-                    // Wait for Clerk to be ready
-                    const checkClerk = setInterval(() => {
-                        if (window.Clerk && window.Clerk.load) {
-                            clearInterval(checkClerk);
-                            loadClerk();
-                        }
-                    }, 100);
+                async function loadClerk() {
+                    // Load Clerk with key from data attribute
+                    await window.Clerk.load();
                     
-                    async function loadClerk() {
-                        await window.Clerk.load();
-                        
-                        appState.clerkReady = true;
-                        console.log("✅ Clerk loaded successfully");
-                        
-                        // Check actual auth state
-                        const user = window.Clerk.user;
-                        
-                        if (user) {
-                            console.log("✅ User already signed in:", user.id);
-                            await handleAuthSuccess(user);
-                        } else {
-                            console.log("⏳ No user signed in, showing welcome page");
-                            handleAuthChange(null);
-                        }
-                        
-                        // Listen for auth changes
-                        window.Clerk.addListener(async ({ user }) => {
-                            console.log("👤 Auth state changed:", user ? user.id : 'null');
-                            if (user) {
-                                await handleAuthSuccess(user);
-                            } else {
-                                handleAuthChange(null);
-                            }
-                        });
+                    appState.clerkReady = true;
+                    console.log("✅ Clerk loaded successfully");
+                    
+                    // CORRECT: Use official auth check methods
+                    const user = window.Clerk.user;
+                    const session = window.Clerk.session;
+                    
+                    if (user && session) {
+                        console.log("✅ Valid user session:", user.id);
+                        await handleAuthSuccess(user);
+                    } else {
+                        console.log("⏳ No valid user session");
+                        handleAuthChange(null);
                     }
                     
-                } catch (err) {
-                    console.error("❌ Clerk initialization error:", err);
-                    handleAuthChange(null);
+                    // Listen for auth changes
+                    window.Clerk.addListener(async ({ user, session }) => {
+                        if (user && session) {
+                            await handleAuthSuccess(user);
+                        } else {
+                            handleAuthChange(null);
+                        }
+                    });
                 }
-            });
-
-            async function handleAuthSuccess(user) {
-                appState.userId = user.id;
-                await fetchCredits(); // Force immediate credit fetch
-                await fetchModules(); // Load modules immediately
-                updateHeaderForAuthUser();
-                renderModules();
-                navigate('modules');
-            }
-
-            function handleAuthChange(user) {
-                appState.userId = user?.id || null;
                 
-                if (user) {
-                    handleAuthSuccess(user);
-                } else {
-                    // Logged out state
-                    updateHeaderForGuest();
-                    navigate('welcome');
-                    appState.modules = [];
-                    appState.activeModule = null;
+            } catch (err) {
+                console.error("❌ Clerk initialization error:", err);
+                handleAuthChange(null);
+            }
+        });
+
+        // Handle successful auth
+        async function handleAuthSuccess(user) {
+            appState.userId = user.id;
+            await fetchCredits();
+            await fetchModules();
+            updateHeaderForAuthUser();
+            renderModules();
+            navigate('modules');
+        }
+
+        // Handle auth change
+        function handleAuthChange(user) {
+            appState.userId = user?.id || null;
+            
+            if (user) {
+                handleAuthSuccess(user);
+            } else {
+                // Logged out
+                updateHeaderForGuest();
+                navigate('welcome');
+                appState.modules = [];
+                appState.activeModule = null;
+                localStorage.removeItem('pendingModule');
+            }
+        }
+
+        // Transfer pending module after signup (OUTSIDE load event)
+        window.Clerk?.addListener(async ({ user }) => {
+            if (user && appState.userId && localStorage.getItem('pendingModule')) {
+                console.log("🔄 Transferring pending module...");
+                
+                const pending = JSON.parse(localStorage.getItem('pendingModule'));
+                
+                try {
+                    const token = await window.Clerk.session.getToken();
+                    
+                    await fetch('/api/user/transfer-pending-module', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(pending)
+                    });
+                    
                     localStorage.removeItem('pendingModule');
+                    await fetchModules(); // Reload to show transferred data
+                    
+                } catch (error) {
+                    console.error("❌ Failed to transfer module:", error);
                 }
             }
+        });
+
         function setupHeaderControls() {
             const headerControls = document.getElementById('headerControls');
             const signInBtn = document.getElementById('signInBtn');
@@ -520,28 +557,6 @@
             if (signInBtn) signInBtn.onclick = () => window.Clerk.openSignIn();
             if (signUpBtn) signUpBtn.onclick = () => window.Clerk.openSignUp();
             if (headerControls) headerControls.classList.remove('hidden');
-        }
-
-        function handleAuthChange(user) {
-            appState.userId = user?.id || null;
-            
-            const headerControls = document.getElementById('headerControls');
-            
-            if (user) {
-                // User is logged in
-                updateHeaderForAuthUser();
-                fetchCredits();
-                fetchModules();
-                navigate('modules');
-            } else {
-                // User is logged out
-                updateHeaderForGuest();
-                navigate('welcome');
-                // Clear stored modules
-                appState.modules = [];
-                appState.activeModule = null;
-                localStorage.removeItem('pendingModule');
-            }
         }
 
         function updateHeaderForGuest() {
@@ -671,14 +686,28 @@
 
         // NAVIGATION
         function navigate(page) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById(page).classList.add('active');
+            // Wait for DOM to be ready
+            const targetElement = document.getElementById(page);
+            if (!targetElement) {
+                console.warn(`⏳ DOM not ready for page: ${page}, retrying...`);
+                setTimeout(() => navigate(page), 100);
+                return;
+            }
             
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(p => {
+                if (p) p.classList.remove('active');
+            });
+            
+            // Show target page
+            targetElement.classList.add('active');
+            
+            // Handle special cases
             if (page === 'survey') {
                 appState.currentQuestion = 0;
                 renderQuestion();
             } else if (page === 'modules') {
-                renderModules();
+                renderModules(); // Ensure this runs after DOM ready
             }
         }
 
@@ -893,54 +922,114 @@
             renderModules();
         }
 
+        // ✅ NEW: Bulletproof renderModules() with DOM safety
         function renderModules() {
+            // CRITICAL: Wait for DOM to be ready
             const container = document.getElementById('modulesContainer');
+            if (!container) {
+                console.warn("⏳ Modules container not ready, retrying...");
+                setTimeout(renderModules, 100);
+                return;
+            }
+            
+            // Clear existing content
             container.innerHTML = '';
             
-            // Render Retake Survey button
+            // Add Retake Survey button (only for authenticated users)
             if (appState.userId) {
-                container.innerHTML = '<button class="btn btn-primary retake-survey-btn" onclick="retakeSurvey()">Retake Survey</button>';
+                const retakeBtn = document.createElement('button');
+                retakeBtn.className = 'btn btn-primary retake-survey-btn';
+                retakeBtn.textContent = 'Retake Survey';
+                retakeBtn.onclick = retakeSurvey;
+                container.appendChild(retakeBtn);
             }
             
-            // Render active module
-            if (appState.activeModule || appState.modules.length > 0) {
-                const activeMod = appState.activeModule || appState.modules.find(m => m.is_active) || appState.modules[0];
-                if (activeMod) {
-                    container.appendChild(renderModule(activeMod, true));
-                }
+            // Render active module (current workflow)
+            const activeMod = appState.activeModule || 
+                             appState.modules.find(m => m.is_active) || 
+                             appState.modules[0];
+            
+            if (activeMod) {
+                const activeElement = createModuleElement(activeMod, true);
+                if (activeElement) container.appendChild(activeElement);
             }
             
-            // Render saved modules (excluding active)
+            // Render saved modules (read-only)
             appState.modules.filter(m => !m.is_active).forEach(mod => {
-                container.appendChild(renderModule(mod, false));
+                const savedElement = createModuleElement(mod, false);
+                if (savedElement) container.appendChild(savedElement);
             });
+            
+            console.log("✅ Modules rendered successfully");
         }
 
-        function renderModule(moduleData, isActive = false) {
+        // ✅ NEW: Safe module element creation
+        function createModuleElement(moduleData, isActive = false) {
+            // CRITICAL: Validate data exists
+            if (!moduleData) {
+                console.warn("⚠️ Invalid module data");
+                return null;
+            }
+            
             const moduleDiv = document.createElement('div');
             moduleDiv.className = `module ${isActive ? 'active' : 'saved'}`;
             
+            // Build content safely
             const completedAt = moduleData.completed_at || moduleData.created_at;
+            const surveyData = moduleData.survey_data || moduleData.survey || {};
+            const jobDesc = moduleData.job_description || '';
+            const hasResults = moduleData.scan_results;
             
-            moduleDiv.innerHTML = `
-                <div class="module-header">
-                    <div class="module-title">${isActive ? 'Current Analysis' : 'Previous Analysis'}</div>
-                </div>
-                
-                <div class="survey-results-panel">
-                    <h4>Survey Responses</h4>
-                    ${renderSurveyResults(moduleData.survey_data || moduleData.survey)}
-                </div>
-                
-                <div class="job-description-section" style="margin: 20px 0;">
-                    <h4>Job Description</h4>
-                    <p style="font-size: 13px; color: #6b7280; white-space: pre-wrap;">${moduleData.job_description || 'No job description scanned yet.'}</p>
-                </div>
-                
-                ${moduleData.scan_results ? renderResultsPreview(moduleData.scan_results) : ''}
-                
-                <div class="module-date">${formatDate(completedAt)}</div>
+            // Create header
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'module-header';
+            headerDiv.innerHTML = `
+                <div class="module-title">${isActive ? 'Current Analysis' : 'Previous Analysis'}</div>
             `;
+            
+            // Create survey panel
+            const surveyPanel = document.createElement('div');
+            surveyPanel.className = 'survey-results-panel';
+            surveyPanel.innerHTML = `
+                <h4>Survey Responses</h4>
+                ${renderSurveyResults(surveyData)}
+            `;
+            
+            // Create job description section
+            const jobSection = document.createElement('div');
+            jobSection.className = 'job-description-section';
+            jobSection.style.margin = '20px 0';
+            jobSection.innerHTML = `
+                <h4>Job Description</h4>
+                <p style="font-size: 13px; color: #6b7280; white-space: pre-wrap;">${jobDesc || 'No job description scanned yet.'}</p>
+            `;
+            
+            // Add results preview if available
+            if (hasResults) {
+                const resultsDiv = document.createElement('div');
+                resultsDiv.style.margin = '20px 0';
+                resultsDiv.innerHTML = `
+                    <h4>Scan Results</h4>
+                    <p style="font-size: 24px; font-weight: 700; color: var(--primary-color); margin: 8px 0;">
+                        ${Math.round(hasResults.overall_score || 0)}% Match
+                    </p>
+                    <button class="btn btn-primary" onclick="viewFullResults('${hasResults.id || ''}')" style="font-size: 14px; padding: 8px 16px;">
+                        View Full Results
+                    </button>
+                `;
+                jobSection.appendChild(resultsDiv);
+            }
+            
+            // Create date element
+            const dateDiv = document.createElement('div');
+            dateDiv.className = 'module-date';
+            dateDiv.textContent = formatDate(completedAt);
+            
+            // Assemble module
+            moduleDiv.appendChild(headerDiv);
+            moduleDiv.appendChild(surveyPanel);
+            moduleDiv.appendChild(jobSection);
+            moduleDiv.appendChild(dateDiv);
             
             return moduleDiv;
         }
@@ -962,22 +1051,6 @@
                     <span style="font-weight: 600;">${value}/10</span>
                 </div>
             `).join('');
-        }
-
-        function renderResultsPreview(results) {
-            if (!results) return '';
-            
-            return `
-                <div style="margin: 20px 0;">
-                    <h4>Scan Results</h4>
-                    <p style="font-size: 24px; font-weight: 700; color: var(--primary-color); margin: 8px 0;">
-                        ${Math.round(results.overall_score || 0)}% Match
-                    </p>
-                    <button class="btn btn-primary" onclick="viewFullResults('${results.id}')" style="font-size: 14px; padding: 8px 16px;">
-                        View Full Results
-                    </button>
-                </div>
-            `;
         }
 
         function viewFullResults(moduleId) {
@@ -1109,7 +1182,7 @@
         function loadStripe(publishableKey) {
             return new Promise((resolve) => {
                 const script = document.createElement('script');
-                script.src = 'https://js.stripe.com/v3/';
+                script.src = 'https://js.stripe.com/v3/  ';
                 script.onload = () => resolve(window.Stripe(publishableKey));
                 document.head.appendChild(script);
             });
