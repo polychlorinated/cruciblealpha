@@ -357,7 +357,7 @@
         </div>
     </div>
 
-    <script>
+   <script>
         // SAFE DATE FORMATTER
         function formatDate(dateString) {
             if (!dateString) return 'No date';
@@ -369,7 +369,8 @@
                 minute: '2-digit'
             });
         }
-         // ✅ NEW: Survey state management functions
+
+        // ✅ Survey state management functions
         function saveSurveyProgress() {
             const surveyState = {
                 survey: appState.survey,
@@ -384,6 +385,7 @@
             localStorage.removeItem('pendingSurvey');
             console.log("✅ Survey progress cleared");
         }
+
         // QUESTIONS DATA
         const questions = [
             {
@@ -489,10 +491,27 @@
                         handleAuthChange(null);
                     }
                     
+                    // Replace your current Clerk listener with this:
                     window.Clerk.addListener(async ({ user, session }) => {
-                        if (user && session) {
+                        console.log("👂 Clerk auth change detected:", { 
+                            hasUser: !!user, 
+                            hasSession: !!session,
+                            currentAppUser: appState.userId 
+                        });
+                        
+                        // 🚨 PREVENT RACE CONDITION: Don't process if we're actively signing out
+                        if (window.Clerk?.session?.isSigningOut) {
+                            console.log("🚫 Ignoring auth change - user is signing out");
+                            return;
+                        }
+                        
+                        if (user && session && user.id !== appState.userId) {
+                            // ✅ New user signed in (different from current)
+                            console.log("✅ New user signed in:", user.id);
                             await handleAuthSuccess(user);
-                        } else {
+                        } else if (!user || !session) {
+                            // 👋 User signed out or session ended
+                            console.log("👋 User signed out");
                             handleAuthChange(null);
                         }
                     });
@@ -504,13 +523,13 @@
             }
         });
 
-       async function handleAuthSuccess(user) {
+        async function handleAuthSuccess(user) {
             appState.userId = user.id;
             await fetchCredits();
             await fetchModules();
             updateHeaderForAuthUser();
             
-            // ✅ NEW: Check if user has an active survey workflow
+            // Check if user has an active survey workflow
             const hasPendingSurvey = localStorage.getItem('pendingSurvey');
             const hasActiveModule = appState.modules.find(m => m.is_active);
             
@@ -594,7 +613,44 @@
         }
 
         function signOutUser() {
-            window.Clerk.signOut();
+            console.log("🔄 Starting sign out process...");
+            
+            // Set flag to prevent race condition
+            if (window.Clerk?.session) {
+                window.Clerk.session.isSigningOut = true;
+            }
+            
+            // Clear all local storage
+            localStorage.removeItem('pendingModule');
+            localStorage.removeItem('pendingSurvey');
+            
+            // Clear app state immediately
+            appState.userId = null;
+            appState.credits = 0;
+            appState.modules = [];
+            appState.activeModule = null;
+            appState.survey = {};
+            appState.currentQuestion = 0;
+            appState.lastJobResult = null;
+            
+            // Force UI update
+            updateHeaderForGuest();
+            navigate('welcome');
+            
+            // Then actually sign out
+            window.Clerk.signOut().then(() => {
+                console.log("✅ Sign out completed");
+                // Reset the flag after sign out
+                if (window.Clerk?.session) {
+                    window.Clerk.session.isSigningOut = false;
+                }
+            }).catch(err => {
+                console.error("❌ Sign out error:", err);
+                // Reset flag even on error
+                if (window.Clerk?.session) {
+                    window.Clerk.session.isSigningOut = false;
+                }
+            });
         }
 
         // SURVEY RENDERING
@@ -632,7 +688,6 @@
             nextBtn.disabled = !isAnswered;
         }
 
-        // AFTER (new version):
         function selectOption(dimension, value, element) {
             document.querySelectorAll('.option').forEach(opt => {
                 opt.classList.remove('selected');
@@ -642,7 +697,7 @@
             appState.survey[dimension] = value;
             document.getElementById('nextBtn').disabled = false;
             
-            // ✅ NEW: Save progress
+            // Save progress
             saveSurveyProgress();
             console.log("✅ Survey updated:", appState.survey);
         }
@@ -657,8 +712,50 @@
             }
         }
 
+        async function createNewModule() {
+            try {
+                const token = await window.Clerk.session.getToken();
+                
+                // ✅ Use the working scan-job endpoint instead of create-module
+                const traumaPayload = {
+                    safety_baseline: appState.survey.safety_baseline || 5,
+                    adhd_wiring: appState.survey.adhd_wiring || 5,
+                    capability: appState.survey.capability || 5,
+                    co_regulation: appState.survey.co_regulation || 5,
+                    financial: appState.survey.financial || 5
+                };
+                
+                const response = await fetch('/api/scan-job', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        job_description: "",  // Empty job for now
+                        trauma: traumaPayload,
+                        user_id: appState.userId,
+                        consume_credit: false  // Don't consume credit for survey-only
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to create module via scan-job');
+                }
+                
+                console.log("✅ Module created successfully via scan-job");
+                
+                // Refresh modules after creation
+                await fetchModules();
+                
+            } catch (error) {
+                console.error("❌ Error creating module:", error);
+                alert('Failed to save survey. Please try again.');
+            }
+        }
+
         function completeSurvey() {
-            clearSurveyProgress(); // ✅ Clear saved progress
+            clearSurveyProgress(); // Clear saved progress
             
             if (appState.userId) {
                 createNewModule();
@@ -673,20 +770,6 @@
             navigate('job');
         }
 
-        function createNewModule() {
-            supabase.table("modules").update({"is_active": false}).eq("user_id", appState.userId).eq("is_active", True).execute();
-            
-            supabase.table("modules").insert({
-                "user_id": appState.userId,
-                "survey_data": appState.survey,
-                "job_description": "",
-                "scan_results": null,
-                "is_active": true,
-                "created_at": new Date().toISOString(),
-                "completed_at": null
-            }).execute();
-        }
-
         function previousQuestion() {
             if (appState.currentQuestion > 0) {
                 appState.currentQuestion--;
@@ -694,7 +777,7 @@
             }
         }
 
-        // ✅ FIXED: Navigation with retry limit and NO circular dependency
+        // Navigation with retry limit
         function navigate(page, retryCount = 0) {
             const MAX_RETRIES = 50;
             
@@ -718,7 +801,7 @@
             // Show target page
             targetElement.classList.add('active');
             
-            // Handle special cases WITHOUT calling renderModules again
+            // Handle special cases
             if (page === 'survey') {
                 appState.currentQuestion = 0;
                 renderQuestion();
@@ -733,17 +816,39 @@
             
             try {
                 const token = await window.Clerk.session.getToken();
-                const response = await fetch('/api/user/credits', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
                 
-                if (!response.ok) throw new Error('Failed to fetch credits');
+                // Test multiple possible credit endpoints
+                const endpoints = ['/api/user/credits', '/api/credits', '/api/user/account'];
                 
-                const data = await response.json();
-                appState.credits = data.credits;
+                for (const endpoint of endpoints) {
+                    try {
+                        const response = await fetch(endpoint, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('✅ Credits fetched from:', endpoint, data);
+                            
+                            if (data.credits !== undefined) {
+                                appState.credits = data.credits;
+                                updateCreditDisplay();
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`❌ ${endpoint} failed:`, e);
+                    }
+                }
+                
+                console.warn('❌ No credit endpoints working, defaulting to 0');
+                appState.credits = 0;
                 updateCreditDisplay();
+                
             } catch (error) {
                 console.error("❌ Error fetching credits:", error);
+                appState.credits = 0;
+                updateCreditDisplay();
             }
         }
 
@@ -930,7 +1035,6 @@
             renderModules();
         }
 
-        // ✅ SAFE: Modules rendering that doesn't call navigate()
         function renderModules() {
             const container = document.getElementById('modulesContainer');
             if (!container) {
@@ -1063,19 +1167,33 @@
                 return;
             }
             
-            if (appState.activeModule?.id) {
-                supabase.table("modules").update({"is_active": false}).eq("id", appState.activeModule.id).execute();
+            try {
+                const token = await window.Clerk.session.getToken();
+                
+                // ✅ Use API to deactivate current module
+                if (appState.activeModule?.id) {
+                    await fetch(`/api/user/modules/${appState.activeModule.id}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ is_active: false })
+                    });
+                }
+                
+                // Start fresh survey
+                appState.survey = {};
+                appState.currentQuestion = 0;
+                appState.lastJobResult = null;
+                
+                clearSurveyProgress();
+                navigate('survey');
+                
+            } catch (error) {
+                console.error("❌ Error deactivating module:", error);
+                alert('Failed to start new survey. Please try again.');
             }
-            
-            appState.survey = {};
-            appState.currentQuestion = 0;
-            appState.lastJobResult = null;
-            
-            // ✅ NEW: Clear any saved progress
-            clearSurveyProgress();
-            
-            createNewModule();
-            navigate('survey');
         }
 
         // DOWNLOAD HANDLING
@@ -1169,7 +1287,7 @@
         function loadStripe(publishableKey) {
             return new Promise((resolve) => {
                 const script = document.createElement('script');
-                script.src = 'https://js.stripe.com/v3/  ';
+                script.src = 'https://js.stripe.com/v3/';
                 script.onload = () => resolve(window.Stripe(publishableKey));
                 document.head.appendChild(script);
             });
@@ -1189,6 +1307,77 @@
                 alert('✅ Credits purchased successfully!');
             }
         });
+
+                // ===== ADD THESE DEBUG FUNCTIONS AT THE BOTTOM =====
+
+        // Test your backend endpoints
+        async function debugBackend() {
+            try {
+                const token = await window.Clerk.session.getToken();
+                
+                // Test different possible endpoints
+                const endpoints = [
+                    '/api/user/modules',
+                    '/api/user/create-module', 
+                    '/api/modules/create',
+                    '/api/modules',
+                    '/api/user/module'
+                ];
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        const response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({test: true})
+                        });
+                        console.log(`${endpoint}: ${response.status} ${response.statusText}`);
+                    } catch (e) {
+                        console.log(`${endpoint}: Failed`);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Debug failed:', error);
+            }
+        }
+
+        // Check what your backend serves
+        async function checkBackend() {
+            const baseUrl = 'https://fuzzy-space-dollop-gg555q4wgr5hpvr6-8000.app.github.dev';
+            
+            try {
+                // Check root endpoint
+                const root = await fetch(baseUrl);
+                console.log('Root status:', root.status);
+                
+                // Check API root
+                const api = await fetch(baseUrl + '/api');
+                console.log('API root status:', api.status);
+                
+                // Check user endpoints
+                const user = await fetch(baseUrl + '/api/user');
+                console.log('User endpoint status:', user.status);
+                
+            } catch (error) {
+                console.error('Backend check failed:', error);
+            }
+        }
+
+        // ===== RUN DEBUG AUTOMATICALLY ON LOAD =====
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('🔍 Running backend debug...');
+                checkBackend();
+                if (appState.userId) {
+                    debugBackend();
+                }
+            }, 2000); // Wait 2 seconds for Clerk to load
+        });
+    
     </script>
 </body>
 </html>

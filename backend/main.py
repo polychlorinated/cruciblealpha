@@ -1,5 +1,5 @@
 # ===== IMPORTS =====
-from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi import FastAPI, HTTPException, Header, Request, Depends
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -495,3 +495,28 @@ async def serve_frontend_catch_all(full_path: str):
         return None
     
     return await serve_frontend()
+
+# ✅ CORRECT - use get_clerk_user which exists
+@app.post("/api/user/create-module")
+async def create_module(request: Request, module_data: dict, authorization: Optional[str] = Header(None)):
+    """Create a new module for the user"""
+    try:
+        # Get user from clerk
+        user = await get_clerk_user(authorization)
+        
+        # Deactivate existing active modules
+        supabase.table("modules").update({"is_active": False}).eq("user_id", user.id).eq("is_active", True).execute()
+        
+        # Create new module
+        result = supabase.table("modules").insert({
+            "user_id": user.id,
+            "survey_data": module_data.get("survey_data", {}),
+            "job_description": module_data.get("job_description", ""),
+            "scan_results": module_data.get("scan_results"),
+            "is_active": module_data.get("is_active", True),
+            "created_at": datetime.now().isoformat()
+        }).execute()
+        
+        return {"success": True, "module": result.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
