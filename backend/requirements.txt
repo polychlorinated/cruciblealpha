@@ -16,3 +16,8 @@ httpx
 # Utilities
 python-dotenv==1.0.0
 pydantic
+
+# Testing
+pytest
+httpx
+pytest-asyncio

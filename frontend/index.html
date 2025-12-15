@@ -1,1383 +1,1453 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AOJA - Trauma-Informed Job Scanner</title>
-    
-    <!-- Injected by FastAPI from .env - DO NOT MODIFY THIS LINE -->
-    <script>
-        window.STRIPE_PUBLISHABLE_KEY = 'INJECT_ME';
-    </script>
-    
-    <!-- OFFICIAL CLERK PATTERN -->
-    <script
-        async
-        crossorigin="anonymous"
-        data-clerk-publishable-key="pk_test_YWRlcXVhdGUtbGlvbmVzcy0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
-        src="https://adequate-lioness-36.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
-        type="text/javascript">
-    </script>
-    
-    <style>
-        :root {
-            --border-color: #e5e7eb;
-            --primary-color: #3b82f6;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 80px 12px 24px;
-            background: #f9fafb;
-            color: #111827;
-        }
-        
-        /* HEADER */
-        header {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: white;
-            border-bottom: 1px solid var(--border-color);
-            padding: 12px 24px;
-            z-index: 1000;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .logo { font-size: 20px; font-weight: 700; color: var(--primary-color); }
-        
-        .header-controls {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-        
-        .header-controls.hidden { display: none; }
-        
-        .credit-display {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-        
-        .credit-display.warning {
-            color: var(--danger-color);
-        }
-        
-        /* MAIN CONTENT */
-        .modules-container {
-            max-width: 900px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-        
-        .module {
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            position: relative;
-        }
-        
-        .module-date {
-            position: absolute;
-            bottom: 12px;
-            right: 16px;
-            font-size: 12px;
-            color: #6b7280;
-            font-style: italic;
-        }
-        
-        .module.active {
-            border: 2px solid var(--primary-color);
-        }
-        
-        .module.saved {
-            opacity: 0.9;
-        }
-        
-        .module-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .module-title {
-            font-size: 18px;
-            font-weight: 600;
-        }
-        
-        .survey-results-panel {
-            background: #f9fafb;
-            padding: 16px;
-            border-radius: 8px;
-            margin: 16px 0;
-            border-left: 4px solid var(--primary-color);
-        }
-        
-        .survey-results-panel h4 {
-            margin: 0 0 12px 0;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        
-        .survey-result-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-            font-size: 13px;
-        }
-        
-        .page { display: none; }
-        .page.active { display: block; }
-        
-        .progress-bar {
-            width: 100%; height: 8px;
-            background: var(--border-color);
-            border-radius: 4px;
-            margin-bottom: 32px;
-            overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: var(--primary-color);
-            transition: width 0.3s ease;
-        }
-        
-        .options { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
-        
-        .option {
-            padding: 16px;
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .option:hover { border-color: var(--primary-color); background: #f9fafb; }
-        .option.selected { 
-            border-color: var(--primary-color); 
-            background: #eff6ff; 
-            color: var(--primary-color); 
-            font-weight: 600; 
-        }
-        
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .btn-primary {
-            background: var(--primary-color);
-            color: white;
-        }
-        
-        .btn-primary:hover:not(:disabled) { background: #2563eb; }
-        .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
-        
-        .btn-secondary {
-            background: white;
-            color: var(--primary-color);
-            border: 1px solid var(--border-color);
-        }
-        
-        .btn-secondary:hover { background: #f9fafb; }
-        
-        .btn-group { display: flex; gap: 12px; margin-top: 24px; }
-        
-        .score-circle {
-            width: 150px; height: 150px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 24px auto;
-            font-size: 36px;
-            font-weight: 700;
-            color: white;
-        }
-        
-        .score-good { background: var(--success-color); }
-        .score-medium { background: #f59e0b; }
-        .score-poor { background: var(--danger-color); }
-        
-        .dimension { margin-bottom: 20px; }
-        
-        .dimension-label {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        
-        .dimension-progress {
-            width: 100%; height: 8px;
-            background: var(--border-color);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        
-        .dimension-fill {
-            height: 100%;
-            background: var(--primary-color);
-            transition: width 0.5s ease;
-        }
-        
-        .flags {
-            display: grid; grid-template-columns: 1fr 1fr;
-            gap: 24px; margin-top: 32px;
-        }
-        
-        .flag-section h3 {
-            margin-bottom: 12px;
-            font-size: 16px;
-        }
-        
-        .flag {
-            padding: 12px; margin-bottom: 8px;
-            border-radius: 6px;
-            background: #f3f4f6;
-            font-size: 14px;
-        }
-        
-        .flag.green { background: #d1fae5; }
-        .flag.red { background: #fee2e2; }
-        
-        textarea {
-            width: 100%; padding: 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 14px;
-            resize: vertical;
-        }
-        
-        .retake-survey-btn {
-            margin-bottom: 16px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AOJA - Trauma-Informed Job Scanner</title>
+
+  <!-- Injected by FastAPI from .env - DO NOT MODIFY THIS LINE -->
+  <script>
+    window.STRIPE_PUBLISHABLE_KEY = 'INJECT_ME';
+  </script>
+
+  <!-- Clerk publishable key is injected by backend into data-clerk-publishable-key="" -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key=""
+    src="https://adequate-lioness-36.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+    type="text/javascript">
+  </script>
+
+  <style>
+    :root {
+      --border-color: #e5e7eb;
+      --primary-color: #3b82f6;
+      --success-color: #10b981;
+      --danger-color: #ef4444;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 80px 12px 24px;
+      background: #f9fafb;
+      color: #111827;
+    }
+
+    /* HEADER */
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: white;
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      z-index: 1000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .logo { font-size: 20px; font-weight: 700; color: var(--primary-color); }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .credit-display {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--primary-color);
+    }
+
+    .credit-display.warning {
+      color: var(--danger-color);
+    }
+
+    /* MAIN CONTENT */
+    .modules-container {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .module {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    .module-date {
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      font-size: 12px;
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    .module.active {
+      border: 2px solid var(--primary-color);
+    }
+
+    .module.saved {
+      opacity: 0.9;
+    }
+
+    .module-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .module-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .survey-results-panel {
+      background: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      border-left: 4px solid var(--primary-color);
+    }
+
+    .survey-results-panel h4 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .survey-result-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .progress-bar {
+      width: 100%; height: 8px;
+      background: var(--border-color);
+      border-radius: 4px;
+      margin-bottom: 32px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--primary-color);
+      transition: width 0.3s ease;
+    }
+
+    .options { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
+
+    .option {
+      padding: 16px;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .option:hover { border-color: var(--primary-color); background: #f9fafb; }
+    .option.selected {
+      border-color: var(--primary-color);
+      background: #eff6ff;
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #2563eb; }
+    .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: white;
+      color: var(--primary-color);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover { background: #f9fafb; }
+
+    .btn-group { display: flex; gap: 12px; margin-top: 24px; }
+
+    .score-circle {
+      width: 150px; height: 150px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 24px auto;
+      font-size: 36px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .score-good { background: var(--success-color); }
+    .score-medium { background: #f59e0b; }
+    .score-poor { background: var(--danger-color); }
+
+    .flags {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 24px; margin-top: 32px;
+    }
+
+    .flag-section h3 {
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+
+    .flag {
+      padding: 12px; margin-bottom: 8px;
+      border-radius: 6px;
+      background: #f3f4f6;
+      font-size: 14px;
+    }
+
+    .flag.green { background: #d1fae5; }
+    .flag.red { background: #fee2e2; }
+
+    textarea {
+      width: 100%; padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+    }
+
+    .retake-survey-btn {
+      margin-bottom: 16px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 12px;
+    }
+  </style>
 </head>
+
 <body>
-    <!-- HEADER -->
-    <header>
-        <div class="logo">AOJA</div>
-        <div class="header-controls" id="headerControls">
-            <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
-            <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
-        </div>
-    </header>
+  <!-- HEADER -->
+  <header>
+    <div class="logo">AOJA</div>
+    <div class="header-controls" id="headerControls">
+      <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
+      <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
+    </div>
+  </header>
 
-    <!-- MAIN CONTENT -->
-    <div id="app">
-        <!-- Welcome Page -->
-        <div class="page active" id="welcome">
-            <div class="container">
-                <h1>Trauma-Informed Job Scanner</h1>
-                <p style="margin-bottom: 24px;">For ADHD & CPTSD professionals. Find workplaces that work with your nervous system, not against it.</p>
-                <button class="btn btn-primary" onclick="navigate('survey')">Start Assessment</button>
-            </div>
-        </div>
-
-        <!-- Survey Page -->
-        <div class="page" id="survey">
-            <div class="container">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="surveyProgress" style="width: 0%"></div>
-                </div>
-                
-                <div class="question-container" id="questionContainer"></div>
-                
-                <div class="btn-group">
-                    <button class="btn btn-secondary" id="prevBtn" onclick="previousQuestion()" style="display: none;">Previous</button>
-                    <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()" disabled>Next</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Job Input Page -->
-        <div class="page" id="job">
-            <div class="container">
-                <h2>Paste Job Description</h2>
-                <textarea id="jobDescription" rows="12" placeholder="Paste the full job description here..."></textarea>
-                <button class="btn btn-primary" id="scanBtn" onclick="scanJob()" style="margin-top: 16px;">Scan Job (Free Preview)</button>
-                <button class="btn btn-primary" id="buyCreditsBtn" onclick="buyMoreCredits()" style="margin-top: 16px; display: none;">Buy More Credits</button>
-            </div>
-        </div>
-
-        <!-- Results Page -->
-        <div class="page" id="results">
-            <div class="container">
-                <h2>Job Analysis Results</h2>
-                
-                <div class="score-circle" id="overallScore">-</div>
-                <p style="text-align: center; margin-bottom: 32px;" id="scoreLabel">Overall Match</p>
-                
-                <h3>Dimensional Analysis</h3>
-                <div id="dimensionalScores"></div>
-                
-                <div class="flags">
-                    <div class="flag-section">
-                        <h3>🟢 Green Flags</h3>
-                        <div id="greenFlags"></div>
-                    </div>
-                    <div class="flag-section">
-                        <h3>🔴 Red Flags</h3>
-                        <div id="redFlags"></div>
-                    </div>
-                </div>
-                
-                <button class="btn btn-primary" id="downloadBtn" onclick="handleDownload()" style="margin-top: 24px;">
-                    <span id="downloadBtnText">Create An Account To Access Free Report</span>
-                </button>
-                
-                <button class="btn btn-secondary" onclick="navigate('job')" style="margin-left: 12px;">Scan Another Job</button>
-            </div>
-        </div>
-
-        <!-- Modules Container (for logged-in users) -->
-        <div id="modulesPage" class="page">
-            <div class="modules-container" id="modulesContainer">
-                <!-- Active module will be inserted here -->
-                <!-- Saved modules will be stacked below -->
-            </div>
-        </div>
+  <!-- MAIN CONTENT -->
+  <div id="app">
+    <!-- Welcome Page -->
+    <div class="page active" id="welcome">
+      <div class="container">
+        <h1>Trauma-Informed Job Scanner</h1>
+        <p style="margin-bottom: 24px;">
+          For ADHD & CPTSD professionals. Find workplaces that work with your nervous system, not against it.
+        </p>
+        <button class="btn btn-primary" onclick="startAssessment()">Start Free Scan</button>
+      </div>
     </div>
 
-   <script>
-        // SAFE DATE FORMATTER
-        function formatDate(dateString) {
-            if (!dateString) return 'No date';
-            return new Date(dateString).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+    <!-- Survey Page -->
+    <div class="page" id="survey">
+      <div class="container">
+        <div class="progress-bar">
+          <div class="progress-fill" id="surveyProgress" style="width: 0%"></div>
+        </div>
+
+        <div class="question-container" id="questionContainer"></div>
+
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="prevBtn" onclick="previousQuestion()" style="display: none;">Previous</button>
+          <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()" disabled>Next</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Job Input Page -->
+    <div class="page" id="job">
+      <div class="container">
+        <h2>Paste Job Description</h2>
+        <textarea id="jobDescription" rows="12" placeholder="Paste the full job description here..."></textarea>
+        <button class="btn btn-primary" id="scanBtn" onclick="scanJob()" style="margin-top: 16px;">Scan Job (Free Preview)</button>
+        <button class="btn btn-primary" id="buyCreditsBtn" onclick="buyMoreCredits()" style="margin-top: 16px; display: none;">Buy More Credits</button>
+      </div>
+    </div>
+
+    <!-- Profile Page -->
+    <div class="page" id="profile">
+      <div class="container">
+        <h2>Your Personal Profile</h2>
+        <div id="profileSummary" style="margin-top:16px;"></div>
+        <div style="text-align:center; margin-top:24px;">
+          <button class="btn btn-primary" id="createAccountFromProfile" onclick="window.Clerk.openSignUp()">Create Account to Scan Jobs</button>
+          <button class="btn btn-primary" id="scanFromProfileBtn" style="display:none; margin-left:12px;" onclick="navigate('job')">Scan Job</button>
+          <button class="btn btn-secondary" style="margin-left:12px;" onclick="navigate('survey')">Retake Survey</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Page -->
+    <div class="page" id="results">
+      <div class="container">
+        <h2>Job Analysis Results</h2>
+
+        <div class="score-circle" id="overallScore">-</div>
+        <p style="text-align: center; margin-bottom: 32px;" id="scoreLabel">Overall Match</p>
+
+        <h3>Dimensional Analysis</h3>
+        <div id="dimensionalScores"></div>
+
+        <div class="flags">
+          <div class="flag-section">
+            <h3>Green Flags</h3>
+            <div id="greenFlags"></div>
+          </div>
+          <div class="flag-section">
+            <h3>Red Flags</h3>
+            <div id="redFlags"></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="downloadBtn" onclick="handleDownload()" style="margin-top: 24px;">
+          <span id="downloadBtnText">Create An Account To Access Free Report</span>
+        </button>
+
+        <button class="btn btn-secondary" onclick="navigate('job')" style="margin-left: 12px;">Scan Another Job</button>
+      </div>
+    </div>
+
+    <!-- Modules Container -->
+    <div id="modulesPage" class="page">
+      <div class="modules-container" id="modulesContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    // SAFE DATE FORMATTER
+    function formatDate(dateString) {
+      if (!dateString) return 'No date';
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function startAssessment() {
+      navigate('survey');
+    }
+
+    // QUESTIONS DATA
+    const questions = [
+      {
+        dimension: "safety_baseline",
+        title: "What's your relationship with authority figures?",
+        options: [
+          { text: "I trust them", value: 1 },
+          { text: "Mostly comfortable", value: 3 },
+          { text: "It varies", value: 5 },
+          { text: "Often anxious", value: 8 },
+          { text: "I freeze up", value: 10 }
+        ]
+      },
+      {
+        dimension: "adhd_wiring",
+        title: "How do you work best?",
+        options: [
+          { text: "Deep focus blocks", value: 1 },
+          { text: "Flexible schedule", value: 3 },
+          { text: "Some structure", value: 5 },
+          { text: "Lots of meetings", value: 8 },
+          { text: "Constant interruptions", value: 10 }
+        ]
+      },
+      {
+        dimension: "capability",
+        title: "How do you handle new challenges?",
+        options: [
+          { text: "I thrive", value: 1 },
+          { text: "I'm curious", value: 3 },
+          { text: "Proceed cautiously", value: 5 },
+          { text: "I need support", value: 8 },
+          { text: "I panic", value: 10 }
+        ]
+      },
+      {
+        dimension: "co_regulation",
+        title: "What's your ideal team dynamic?",
+        options: [
+          { text: "Collaborative", value: 1 },
+          { text: "Supportive", value: 3 },
+          { text: "Independent", value: 5 },
+          { text: "Competitive", value: 8 },
+          { text: "Isolated", value: 10 }
+        ]
+      },
+      {
+        dimension: "financial",
+        title: "How important is salary transparency?",
+        options: [
+          { text: "Critical", value: 1 },
+          { text: "Important", value: 3 },
+          { text: "Nice to have", value: 5 },
+          { text: "Not a priority", value: 8 },
+          { text: "I avoid the topic", value: 10 }
+        ]
+      }
+    ];
+
+    // APP STATE
+    const appState = {
+      userId: null,
+      credits: 0,
+      survey: {},
+      currentQuestion: 0,
+      lastJobResult: null,
+      modules: [],
+      activeModule: null,
+      clerkReady: false,
+    };
+
+    // Local state helpers
+    function saveSurveyProgress() {
+      localStorage.setItem('aoja_trauma', JSON.stringify(appState.survey));
+    }
+
+    function clearSurveyProgress() {
+      localStorage.removeItem('aoja_trauma');
+    }
+
+    function saveProfileLocal(profile) {
+      localStorage.setItem('aoja_profile', JSON.stringify(profile));
+    }
+
+    function loadProfileLocal() {
+      const saved = localStorage.getItem('aoja_profile');
+      if (saved) {
+        appState.profile = JSON.parse(saved);
+        return true;
+      }
+      return false;
+    }
+
+    function loadSurveyLocal() {
+      const saved = localStorage.getItem('aoja_trauma');
+      if (saved) {
+        appState.survey = JSON.parse(saved);
+        return true;
+      }
+      return false;
+    }
+
+    async function applyLocalProfileToAccount(user) {
+      const saved = localStorage.getItem('aoja_profile');
+      if (!saved || !user) return;
+
+      try {
+        const token = await window.Clerk.session.getToken();
+        const parsed = JSON.parse(saved);
+
+        const res = await fetch('/api/user/transfer-pending-module', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            survey: parsed.survey || {},
+            job_description: parsed.job_description || "",
+            scan_results: parsed.scan_results || null,
+            created_at: parsed.created_at || new Date().toISOString()
+          })
+        });
+
+        if (res.ok) {
+          localStorage.removeItem('aoja_profile');
+          await fetchModules();
+          await fetchUserProfile();
+          navigate('profile');
+        }
+      } catch (e) {
+        console.error('applyLocalProfileToAccount error:', e);
+      }
+    }
+
+    async function applyLocalSurveyToAccount(user) {
+      const saved = localStorage.getItem('aoja_trauma');
+      if (!saved || !user) return;
+
+      try {
+        const token = await window.Clerk.session.getToken();
+        const survey = JSON.parse(saved);
+
+        const res = await fetch('/api/user/transfer-pending-module', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            survey,
+            job_description: "",
+            scan_results: null,
+            created_at: new Date().toISOString()
+          })
+        });
+
+        if (res.ok) {
+          localStorage.removeItem('aoja_trauma');
+          await fetchModules();
+          await fetchUserProfile();
+        }
+      } catch (e) {
+        console.error('applyLocalSurveyToAccount error:', e);
+      }
+    }
+
+    // CLERK INITIALIZATION
+    let clerkInitStarted = false;
+    window.addEventListener('load', async function () {
+      loadSurveyLocal();
+      loadProfileLocal();
+
+      if (clerkInitStarted) return;
+      clerkInitStarted = true;
+
+      const checkClerk = setInterval(() => {
+        if (window.Clerk && window.Clerk.load) {
+          clearInterval(checkClerk);
+          loadClerk();
+        }
+      }, 100);
+
+      async function loadClerk() {
+        await window.Clerk.load();
+        appState.clerkReady = true;
+
+        const user = window.Clerk.user;
+        const session = window.Clerk.session;
+
+        if (user && session) {
+          await handleAuthSuccess(user);
+        } else {
+          handleAuthChange(null);
         }
 
-        // ✅ Survey state management functions
-        function saveSurveyProgress() {
-            const surveyState = {
-                survey: appState.survey,
-                currentQuestion: appState.currentQuestion,
-                timestamp: new Date().toISOString()
-            };
-            localStorage.setItem('pendingSurvey', JSON.stringify(surveyState));
-            console.log("✅ Survey progress saved");
-        }
+        window.Clerk.addListener(async ({ user, session }) => {
+          if (window.Clerk?.session?.isSigningOut) return;
 
-        function clearSurveyProgress() {
-            localStorage.removeItem('pendingSurvey');
-            console.log("✅ Survey progress cleared");
-        }
+          if (user && session && user.id !== appState.userId) {
+            await handleAuthSuccess(user);
 
-        // QUESTIONS DATA
-        const questions = [
-            {
-                dimension: "safety_baseline",
-                title: "What's your relationship with authority figures?",
-                options: [
-                    { text: "I trust them", value: 1 },
-                    { text: "Mostly comfortable", value: 3 },
-                    { text: "It varies", value: 5 },
-                    { text: "Often anxious", value: 8 },
-                    { text: "I freeze up", value: 10 }
-                ]
-            },
-            {
-                dimension: "adhd_wiring",
-                title: "How do you work best?",
-                options: [
-                    { text: "Deep focus blocks", value: 1 },
-                    { text: "Flexible schedule", value: 3 },
-                    { text: "Some structure", value: 5 },
-                    { text: "Lots of meetings", value: 8 },
-                    { text: "Constant interruptions", value: 10 }
-                ]
-            },
-            {
-                dimension: "capability",
-                title: "How do you handle new challenges?",
-                options: [
-                    { text: "I thrive", value: 1 },
-                    { text: "I'm curious", value: 3 },
-                    { text: "Proceed cautiously", value: 5 },
-                    { text: "I need support", value: 8 },
-                    { text: "I panic", value: 10 }
-                ]
-            },
-            {
-                dimension: "co_regulation",
-                title: "What's your ideal team dynamic?",
-                options: [
-                    { text: "Collaborative", value: 1 },
-                    { text: "Supportive", value: 3 },
-                    { text: "Independent", value: 5 },
-                    { text: "Competitive", value: 8 },
-                    { text: "Isolated", value: 10 }
-                ]
-            },
-            {
-                dimension: "financial",
-                title: "How important is salary transparency?",
-                options: [
-                    { text: "Critical", value: 1 },
-                    { text: "Important", value: 3 },
-                    { text: "Nice to have", value: 5 },
-                    { text: "Not a priority", value: 8 },
-                    { text: "I avoid the topic", value: 10 }
-                ]
+            // Transfer local artifacts into the account
+            if (localStorage.getItem('aoja_profile')) {
+              await applyLocalProfileToAccount(user);
+            } else if (localStorage.getItem('aoja_trauma')) {
+              await applyLocalSurveyToAccount(user);
+            } else {
+              await fetchUserProfile();
             }
-        ];
+          } else if (!user || !session) {
+            handleAuthChange(null);
+          }
+        });
+      }
+    });
 
-        // APP STATE
-        const appState = {
-            userId: null,
-            credits: 0,
-            survey: {},
-            currentQuestion: 0,
-            lastJobResult: null,
-            modules: [],
-            activeModule: null,
-            clerkReady: false,
-            creditCost: 1
+    async function initializeWithRetry(token, attempts = 3, delayMs = 300) {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const resp = await fetch('/api/user/initialize', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (resp.ok) return true;
+          if (resp.status === 401) {
+            await new Promise(r => setTimeout(r, delayMs));
+            continue;
+          }
+          return false;
+        } catch (e) {
+          await new Promise(r => setTimeout(r, delayMs));
+        }
+      }
+      return false;
+    }
+
+    async function handleAuthSuccess(user) {
+      appState.userId = user.id;
+
+      // Ensure user exists and has starter credits
+      try {
+        const token = await window.Clerk.session.getToken();
+        await initializeWithRetry(token);
+      } catch (e) {
+        console.warn('initialize_user failed:', e);
+      }
+
+      updateHeaderForAuthUser();
+      await fetchCredits();
+      await fetchModules();
+      await fetchUserProfile(); // will set appState.profile if server has something
+
+      // If no profile exists yet, but local one does, keep it
+      if (!appState.profile) {
+        loadProfileLocal();
+      }
+
+      // Decide where to land
+      const hasLocalSurvey = localStorage.getItem('aoja_trauma');
+      if (hasLocalSurvey) {
+        appState.survey = JSON.parse(hasLocalSurvey) || {};
+        appState.currentQuestion = 0;
+        navigate('survey');
+        return;
+      }
+
+      if (appState.profile) {
+        navigate('profile');
+        return;
+      }
+
+      // Otherwise start survey
+      appState.survey = {};
+      appState.currentQuestion = 0;
+      navigate('survey');
+    }
+
+    function handleAuthChange(user) {
+      appState.userId = user?.id || null;
+
+      if (user) {
+        handleAuthSuccess(user);
+      } else {
+        updateHeaderForGuest();
+        navigate('welcome');
+        appState.modules = [];
+        appState.activeModule = null;
+        appState.credits = 0;
+        appState.lastJobResult = null;
+      }
+    }
+
+    function updateHeaderForGuest() {
+      const headerControls = document.getElementById('headerControls');
+      if (!headerControls) return;
+
+      headerControls.innerHTML = `
+        <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
+        <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
+      `;
+
+      document.getElementById('signInBtn').onclick = () => window.Clerk.openSignIn();
+      document.getElementById('signUpBtn').onclick = () => window.Clerk.openSignUp();
+    }
+
+    function updateHeaderForAuthUser() {
+      const headerControls = document.getElementById('headerControls');
+      if (!headerControls) return;
+
+      headerControls.innerHTML = `
+        <div class="credit-display" id="creditDisplay">Credits: <span id="creditValue">-</span></div>
+        <button class="btn btn-primary" id="buyCreditsHeaderBtn" onclick="buyMoreCredits()" style="padding: 8px 16px; font-size: 14px;">Buy More</button>
+        <button class="btn btn-secondary" onclick="signOutUser()" style="padding: 8px 16px; font-size: 14px;">Sign Out</button>
+      `;
+    }
+
+    function signOutUser() {
+      if (window.Clerk?.session) window.Clerk.session.isSigningOut = true;
+
+      localStorage.removeItem('aoja_trauma');
+      localStorage.removeItem('aoja_profile');
+
+      appState.userId = null;
+      appState.credits = 0;
+      appState.modules = [];
+      appState.activeModule = null;
+      appState.survey = {};
+      appState.currentQuestion = 0;
+      appState.lastJobResult = null;
+      appState.profile = null;
+
+      updateHeaderForGuest();
+      navigate('welcome');
+
+      window.Clerk.signOut().finally(() => {
+        if (window.Clerk?.session) window.Clerk.session.isSigningOut = false;
+      });
+    }
+
+    // SURVEY RENDERING
+    function renderQuestion() {
+      const container = document.getElementById('questionContainer');
+      const question = questions[appState.currentQuestion];
+      const currentValue = appState.survey[question.dimension];
+
+      container.innerHTML = `
+        <div class="question">
+          <h2>Question ${appState.currentQuestion + 1} of ${questions.length}</h2>
+          <h3 style="margin: 16px 0;">${question.title}</h3>
+          <div class="options">
+            ${question.options.map(opt => `
+              <div class="option ${currentValue === opt.value ? 'selected' : ''}"
+                   data-value="${opt.value}"
+                   onclick="selectOption('${question.dimension}', ${opt.value}, this)">
+                ${opt.text}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      const progress = ((appState.currentQuestion + 1) / questions.length) * 100;
+      document.getElementById('surveyProgress').style.width = `${progress}%`;
+
+      document.getElementById('prevBtn').style.display =
+        appState.currentQuestion > 0 ? 'block' : 'none';
+
+      const nextBtn = document.getElementById('nextBtn');
+      const isAnswered = currentValue !== undefined;
+      nextBtn.textContent =
+        appState.currentQuestion === questions.length - 1 ? 'Complete Survey' : 'Next';
+      nextBtn.disabled = !isAnswered;
+    }
+
+    function selectOption(dimension, value, element) {
+      document.querySelectorAll('.option').forEach(opt => opt.classList.remove('selected'));
+      element.classList.add('selected');
+      appState.survey[dimension] = value;
+      document.getElementById('nextBtn').disabled = false;
+      saveSurveyProgress();
+    }
+
+    function nextQuestion() {
+      if (appState.currentQuestion < questions.length - 1) {
+        appState.currentQuestion++;
+        renderQuestion();
+      } else {
+        completeSurvey();
+      }
+    }
+
+    function previousQuestion() {
+      if (appState.currentQuestion > 0) {
+        appState.currentQuestion--;
+        renderQuestion();
+      }
+    }
+
+    // Navigation
+    function navigate(page, retryCount = 0) {
+      const MAX_RETRIES = 50;
+
+      const targetElement = document.getElementById(page);
+      if (!targetElement) {
+        if (retryCount < MAX_RETRIES) {
+          setTimeout(() => navigate(page, retryCount + 1), 100);
+        } else {
+          console.error(`Failed to find page element '${page}'`);
+        }
+        return;
+      }
+
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      targetElement.classList.add('active');
+
+      if (page === 'survey') {
+        appState.currentQuestion = 0;
+        renderQuestion();
+      }
+
+      if (page === 'profile') {
+        renderProfile();
+      }
+
+      if (page === 'job') {
+        updateScanButton();
+      }
+    }
+
+    // CREDITS
+    async function fetchCredits() {
+      if (!appState.userId) return;
+
+      try {
+        const token = await window.Clerk.session.getToken();
+        const response = await fetch('/api/user/credits', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          appState.credits = data.credits ?? 0;
+          updateCreditDisplay();
+          updateScanButton();
+          return;
+        }
+      } catch (error) {
+        console.warn('fetchCredits error:', error);
+      }
+
+      appState.credits = 0;
+      updateCreditDisplay();
+      updateScanButton();
+    }
+
+    function updateCreditDisplay() {
+      if (!appState.userId) return;
+      const creditValue = document.getElementById('creditValue');
+      const creditDisplay = document.getElementById('creditDisplay');
+
+      if (creditValue && creditDisplay) {
+        creditValue.textContent = appState.credits;
+        creditDisplay.classList.toggle('warning', appState.credits <= 2);
+      }
+    }
+
+    function updateScanButton() {
+      const scanBtn = document.getElementById('scanBtn');
+      const buyCreditsBtn = document.getElementById('buyCreditsBtn');
+      if (!scanBtn || !buyCreditsBtn) return;
+
+      if (!appState.userId) {
+        scanBtn.textContent = 'Scan Job (Free Preview)';
+        scanBtn.disabled = false;
+        scanBtn.style.display = 'block';
+        buyCreditsBtn.style.display = 'none';
+      } else if (appState.credits > 0) {
+        scanBtn.textContent = `Scan Job (1 Credit)`;
+        scanBtn.disabled = false;
+        scanBtn.style.display = 'block';
+        buyCreditsBtn.style.display = 'none';
+      } else {
+        scanBtn.style.display = 'none';
+        buyCreditsBtn.style.display = 'block';
+      }
+    }
+
+    function updateDownloadButton() {
+      const downloadBtn = document.getElementById('downloadBtn');
+      const downloadBtnText = document.getElementById('downloadBtnText');
+      if (!downloadBtn || !downloadBtnText) return;
+
+      if (!appState.userId) {
+        downloadBtnText.textContent = 'Create Free Account to Download Report';
+        downloadBtn.disabled = false;
+        return;
+      }
+
+      // Download is free for signed-in users (credits are charged per scan only)
+      downloadBtnText.textContent = 'Download Report (Free)';
+      downloadBtn.disabled = false;
+    }
+
+    // SURVEY COMPLETION
+    async function completeSurvey() {
+      const rawSurvey = localStorage.getItem('aoja_trauma') || JSON.stringify(appState.survey);
+      const survey = JSON.parse(rawSurvey);
+
+      // Build a local preview profile (so the user can proceed immediately)
+      const profile = {
+        survey,
+        overall_score: null,
+        risk_level: null,
+        dimensional_match: [],
+        green_flags: [],
+        red_flags: [],
+        created_at: new Date().toISOString()
+      };
+
+      // If guest: optionally try preview analysis (no credits) to enrich the profile
+      // If signed-in: keep it survey-only; scans cost credits only.
+      if (!appState.userId) {
+        try {
+          const response = await fetch('/api/scan-job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              job_description: "",
+              trauma: survey,
+              consume_credit: false
+            })
+          });
+          if (response.ok) {
+            const result = await response.json();
+            profile.overall_score = result.overall_score;
+            profile.risk_level = result.risk_level;
+            profile.dimensional_match = result.dimensional_match || [];
+            profile.green_flags = result.green_flags || [];
+            profile.red_flags = result.red_flags || [];
+          }
+        } catch (e) {
+          // keep minimal profile
+        }
+      }
+
+      saveProfileLocal(profile);
+      appState.profile = profile;
+      clearSurveyProgress();
+
+      // If signed in, persist survey to account (no credit cost)
+      if (appState.userId) {
+        try {
+          const token = await window.Clerk.session.getToken();
+          await fetch('/api/user/transfer-pending-module', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              survey,
+              job_description: "",
+              scan_results: null,
+              created_at: new Date().toISOString()
+            })
+          });
+          await fetchModules();
+          await fetchUserProfile();
+        } catch (e) {
+          console.warn('Failed to persist survey to account:', e);
+        }
+      }
+
+      navigate('profile');
+    }
+
+    // JOB SCANNING
+    async function scanJob() {
+      const jobText = document.getElementById('jobDescription').value.trim();
+      if (!jobText) {
+        alert('Please paste a job description.');
+        return;
+      }
+
+      // Require account for full scan (credits apply per scan)
+      if (!appState.userId) {
+        if (confirm('Create a free account to run a full job scan and get starter credits?')) {
+          window.Clerk.openSignUp();
+        }
+        return;
+      }
+
+      // Require a profile to run a scan
+      if (!appState.profile?.survey) {
+        alert('Please complete the survey first to create your personal profile.');
+        navigate('survey');
+        return;
+      }
+
+      if (appState.credits <= 0) {
+        alert('No credits remaining. Please add credits to continue.');
+        return;
+      }
+
+      const scanBtn = document.getElementById('scanBtn');
+      scanBtn.disabled = true;
+      scanBtn.textContent = 'Scanning...';
+
+      try {
+        const surveySource = appState.profile?.survey || appState.survey || {};
+        const traumaPayload = {
+          safety_baseline: surveySource.safety_baseline || 5,
+          adhd_wiring: surveySource.adhd_wiring || 5,
+          capability: surveySource.capability || 5,
+          co_regulation: surveySource.co_regulation || 5,
+          financial: surveySource.financial || 5
         };
 
-        // CLERK INITIALIZATION
-        let clerkInitStarted = false;
-
-        window.addEventListener('load', async function() {
-            if (clerkInitStarted) return;
-            clerkInitStarted = true;
-            
-            console.log("🔄 Initializing Clerk...");
-            
-            try {
-                const checkClerk = setInterval(() => {
-                    if (window.Clerk && window.Clerk.load) {
-                        clearInterval(checkClerk);
-                        loadClerk();
-                    }
-                }, 100);
-                
-                async function loadClerk() {
-                    await window.Clerk.load();
-                    appState.clerkReady = true;
-                    console.log("✅ Clerk loaded successfully");
-                    
-                    const user = window.Clerk.user;
-                    const session = window.Clerk.session;
-                    
-                    if (user && session) {
-                        console.log("✅ Valid user session:", user.id);
-                        await handleAuthSuccess(user);
-                    } else {
-                        console.log("⏳ No valid user session");
-                        handleAuthChange(null);
-                    }
-                    
-                    // Replace your current Clerk listener with this:
-                    window.Clerk.addListener(async ({ user, session }) => {
-                        console.log("👂 Clerk auth change detected:", { 
-                            hasUser: !!user, 
-                            hasSession: !!session,
-                            currentAppUser: appState.userId 
-                        });
-                        
-                        // 🚨 PREVENT RACE CONDITION: Don't process if we're actively signing out
-                        if (window.Clerk?.session?.isSigningOut) {
-                            console.log("🚫 Ignoring auth change - user is signing out");
-                            return;
-                        }
-                        
-                        if (user && session && user.id !== appState.userId) {
-                            // ✅ New user signed in (different from current)
-                            console.log("✅ New user signed in:", user.id);
-                            await handleAuthSuccess(user);
-                        } else if (!user || !session) {
-                            // 👋 User signed out or session ended
-                            console.log("👋 User signed out");
-                            handleAuthChange(null);
-                        }
-                    });
-                }
-                
-            } catch (err) {
-                console.error("❌ Clerk initialization error:", err);
-                handleAuthChange(null);
-            }
+        const token = await window.Clerk.session.getToken();
+        const response = await fetch('/api/scan-job', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            user_id: appState.userId,
+            trauma: traumaPayload,
+            job_description: jobText,
+            consume_credit: true
+          })
         });
 
-        async function handleAuthSuccess(user) {
-            appState.userId = user.id;
-            await fetchCredits();
-            await fetchModules();
-            updateHeaderForAuthUser();
-            
-            // Check if user has an active survey workflow
-            const hasPendingSurvey = localStorage.getItem('pendingSurvey');
-            const hasActiveModule = appState.modules.find(m => m.is_active);
-            
-            if (hasPendingSurvey) {
-                // Continue existing survey
-                const pending = JSON.parse(hasPendingSurvey);
-                appState.survey = pending.survey || {};
-                appState.currentQuestion = pending.currentQuestion || 0;
-                navigate('survey');
-            } else if (hasActiveModule) {
-                // Show modules if user has active workflow
-                navigate('modulesPage');
-            } else {
-                // Start fresh survey
-                appState.survey = {};
-                appState.currentQuestion = 0;
-                navigate('survey');
-            }
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error);
         }
 
-        function handleAuthChange(user) {
-            appState.userId = user?.id || null;
-            
-            if (user) {
-                handleAuthSuccess(user);
-            } else {
-                updateHeaderForGuest();
-                navigate('welcome');
-                appState.modules = [];
-                appState.activeModule = null;
-                localStorage.removeItem('pendingModule');
-            }
+        const result = await response.json();
+        appState.lastJobResult = result;
+
+        displayResults(result);
+        navigate('results');
+
+        await fetchCredits();
+        await fetchModules();
+      } catch (error) {
+        console.error('Job scan error:', error);
+        alert('Job scanning failed: ' + error.message);
+      } finally {
+        updateScanButton();
+      }
+    }
+
+    // RESULTS DISPLAY
+    function displayResults(result) {
+      const scoreEl = document.getElementById('overallScore');
+      const overall = typeof result?.overall_score === 'number' ? result.overall_score : 0;
+      scoreEl.textContent = `${Math.round(overall)}%`;
+      scoreEl.className = `score-circle ${
+        overall >= 70 ? 'score-good' :
+        overall >= 40 ? 'score-medium' : 'score-poor'
+      }`;
+
+      const dimensionsEl = document.getElementById('dimensionalScores');
+      dimensionsEl.innerHTML = '';
+      const dims = Array.isArray(result?.dimensional_match) ? result.dimensional_match : [];
+
+      if (!appState.userId) {
+        // Guest preview: show only first dimension
+        const first = dims[0];
+        if (first) {
+          const pct = typeof first.match_percentage === 'number' ? first.match_percentage : 0;
+          dimensionsEl.innerHTML = `
+            <div style="margin-bottom: 16px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <strong>${first.dimension}</strong>
+                <span style="font-weight:600;">${pct}%</span>
+              </div>
+              <div style="width:100%; background: var(--border-color); height:8px; border-radius:4px; overflow:hidden;">
+                <div style="width: ${pct}%; background: ${first.critical ? '#ef4444' : pct < 75 ? '#f59e0b' : '#10b981'}; height:8px;"></div>
+              </div>
+              <div style="font-size:14px; color: #6b7280; margin-top:4px;">${first.risk_level}</div>
+            </div>
+            <p style="color: #6b7280; text-align: center; margin-top: 16px;">Create account for full dimensional analysis</p>
+          `;
         }
 
-        // Transfer pending module
-        window.Clerk?.addListener(async ({ user }) => {
-            if (user && appState.userId && localStorage.getItem('pendingModule')) {
-                console.log("🔄 Transferring pending module...");
-                const pending = JSON.parse(localStorage.getItem('pendingModule'));
-                
-                try {
-                    const token = await window.Clerk.session.getToken();
-                    await fetch('/api/user/transfer-pending-module', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify(pending)
-                    });
-                    localStorage.removeItem('pendingModule');
-                    await fetchModules();
-                } catch (error) {
-                    console.error("❌ Failed to transfer module:", error);
-                }
-            }
+        const downloadBtnText = document.getElementById('downloadBtnText');
+        downloadBtnText.textContent = 'Create Account for Full Report';
+        document.getElementById('downloadBtn').onclick = () => window.Clerk.openSignUp();
+      } else {
+        // Full results for signed-in users
+        dimensionsEl.innerHTML = dims.map(dim => {
+          const pct = typeof dim.match_percentage === 'number' ? dim.match_percentage : 0;
+          return `
+            <div style="margin-bottom: 16px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <strong>${dim.dimension}</strong>
+                <span style="font-weight:600;">${pct}%</span>
+              </div>
+              <div style="width:100%; background: var(--border-color); height:8px; border-radius:4px; overflow:hidden;">
+                <div style="width: ${pct}%; background: ${dim.critical ? '#ef4444' : pct < 75 ? '#f59e0b' : '#10b981'}; height:8px;"></div>
+              </div>
+              <div style="font-size:14px; color: #6b7280; margin-top:4px;">${dim.risk_level}</div>
+            </div>
+          `;
+        }).join('');
+
+        document.getElementById('downloadBtnText').textContent = 'Download Report (Free)';
+        document.getElementById('downloadBtn').onclick = handleDownload;
+      }
+
+      const greenFlagsEl = document.getElementById('greenFlags');
+      const redFlagsEl = document.getElementById('redFlags');
+      const greens = Array.isArray(result?.green_flags) ? result.green_flags : [];
+      const reds = Array.isArray(result?.red_flags) ? result.red_flags : [];
+
+      greenFlagsEl.innerHTML = greens.length > 0
+        ? greens.map(f => `<div class="flag green">${f}</div>`).join('')
+        : '<div class="flag">No strong green flags detected</div>';
+
+      redFlagsEl.innerHTML = reds.length > 0
+        ? reds.map(f => `<div class="flag red">${f}</div>`).join('')
+        : '<div class="flag">No major red flags detected</div>';
+
+      updateDownloadButton();
+    }
+
+    // MODULES SYSTEM
+    async function fetchModules() {
+      if (!appState.userId) {
+        loadGuestModules();
+        return;
+      }
+
+      try {
+        const token = await window.Clerk.session.getToken();
+        const resp = await fetch('/api/user/modules', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        appState.modules = data.modules || [];
+        appState.activeModule = appState.modules.find(m => m.is_active) || null;
+        renderModules();
+      } catch (e) {
+        console.warn('fetchModules failed:', e);
+        appState.modules = [];
+        appState.activeModule = null;
+        renderModules();
+      }
+    }
+
+    function loadGuestModules() {
+      const saved = localStorage.getItem('aoja_trauma');
+      if (saved) {
+        const survey = JSON.parse(saved);
+        appState.modules = [{ survey, is_active: true, created_at: new Date().toISOString() }];
+        appState.activeModule = appState.modules[0];
+        appState.survey = survey || {};
+      } else {
+        appState.modules = [];
+        appState.activeModule = null;
+      }
+      renderModules();
+    }
+
+    function renderModules() {
+      const container = document.getElementById('modulesContainer');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      if (appState.userId) {
+        const retakeBtn = document.createElement('button');
+        retakeBtn.className = 'btn btn-primary retake-survey-btn';
+        retakeBtn.textContent = 'Retake Survey';
+        retakeBtn.onclick = retakeSurvey;
+        container.appendChild(retakeBtn);
+      }
+
+      const activeMod = appState.activeModule || appState.modules.find(m => m.is_active) || appState.modules[0];
+      if (activeMod) {
+        const activeEl = createModuleElement(activeMod, true);
+        if (activeEl) container.appendChild(activeEl);
+      }
+
+      appState.modules.filter(m => !m.is_active).forEach(mod => {
+        const savedEl = createModuleElement(mod, false);
+        if (savedEl) container.appendChild(savedEl);
+      });
+    }
+
+    function createModuleElement(moduleData, isActive = false) {
+      if (!moduleData) return null;
+
+      const moduleDiv = document.createElement('div');
+      moduleDiv.className = `module ${isActive ? 'active' : 'saved'}`;
+
+      const completedAt = moduleData.completed_at || moduleData.created_at;
+      const surveyData = moduleData.survey_data || moduleData.survey || {};
+      const jobDesc = moduleData.job_description || '';
+      const hasResults = moduleData.scan_results;
+
+      const headerDiv = document.createElement('div');
+      headerDiv.className = 'module-header';
+      headerDiv.innerHTML = `<div class="module-title">${isActive ? 'Current Analysis' : 'Previous Analysis'}</div>`;
+
+      const surveyPanel = document.createElement('div');
+      surveyPanel.className = 'survey-results-panel';
+      surveyPanel.innerHTML = `<h4>Survey Responses</h4>${renderSurveyResults(surveyData)}`;
+
+      const jobSection = document.createElement('div');
+      jobSection.className = 'job-description-section';
+      jobSection.style.margin = '20px 0';
+      jobSection.innerHTML = `
+        <h4>Job Description</h4>
+        <p style="font-size: 13px; color: #6b7280; white-space: pre-wrap;">${jobDesc || 'No job description scanned yet.'}</p>
+      `;
+
+      if (hasResults) {
+        const resultsDiv = document.createElement('div');
+        resultsDiv.style.margin = '20px 0';
+        resultsDiv.innerHTML = `
+          <h4>Scan Results</h4>
+          <p style="font-size: 24px; font-weight: 700; color: var(--primary-color); margin: 8px 0;">
+            ${Math.round(hasResults.overall_score || 0)}% Match
+          </p>
+          <button class="btn btn-primary" onclick="viewFullResults('${moduleData.id || ''}')" style="font-size: 14px; padding: 8px 16px;">
+            View Full Results
+          </button>
+        `;
+        jobSection.appendChild(resultsDiv);
+      }
+
+      const dateDiv = document.createElement('div');
+      dateDiv.className = 'module-date';
+      dateDiv.textContent = formatDate(completedAt);
+
+      moduleDiv.appendChild(headerDiv);
+      moduleDiv.appendChild(surveyPanel);
+      moduleDiv.appendChild(jobSection);
+      moduleDiv.appendChild(dateDiv);
+
+      return moduleDiv;
+    }
+
+    function renderSurveyResults(survey) {
+      if (!survey) return '<p style="font-size: 13px; color: #6b7280;">No survey data.</p>';
+
+      const labels = {
+        safety_baseline: "Safety Baseline",
+        adhd_wiring: "ADHD Wiring",
+        capability: "Capability",
+        co_regulation: "Co-Regulation",
+        financial: "Financial"
+      };
+
+      return Object.entries(survey).map(([key, value]) => `
+        <div class="survey-result-item">
+          <span>${labels[key] || key}:</span>
+          <span style="font-weight: 600;">${value}/10</span>
+        </div>
+      `).join('');
+    }
+
+    function viewFullResults(moduleId) {
+      const module = appState.modules.find(m => m.id === moduleId);
+      if (!module || !module.scan_results) return;
+
+      appState.activeModule = module;
+      appState.survey = module.survey_data || module.survey || {};
+      appState.lastJobResult = module.scan_results;
+      displayResults(module.scan_results);
+      navigate('results');
+    }
+
+    async function retakeSurvey() {
+      if (appState.userId) {
+        try {
+          const token = await window.Clerk.session.getToken();
+          await fetch(`/api/user/retake-survey`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        } catch (error) {
+          console.warn("retake-survey API failed:", error);
+        }
+      }
+
+      appState.survey = {};
+      appState.currentQuestion = 0;
+      appState.lastJobResult = null;
+      appState.profile = null;
+
+      localStorage.removeItem('aoja_profile');
+      clearSurveyProgress();
+
+      navigate('survey');
+    }
+
+    // DOWNLOAD (FREE after scan when signed in)
+    async function handleDownload() {
+      if (!appState.userId) {
+        if (confirm('Create a free account to download your report?')) {
+          window.Clerk.openSignUp();
+        }
+        return;
+      }
+      downloadReport();
+    }
+
+    function downloadReport() {
+      if (!appState.lastJobResult) {
+        alert('No report available. Please scan a job first.');
+        return;
+      }
+
+      const report = {
+        downloaded_at: new Date().toISOString(),
+        user_id: appState.userId,
+        survey_responses: appState.profile?.survey || appState.survey || {},
+        ...appState.lastJobResult
+      };
+
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `job-analysis-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // PROFILE
+    function renderProfile() {
+      const container = document.getElementById('profileSummary');
+      container.innerHTML = '';
+
+      const profile = appState.profile || (loadProfileLocal() && appState.profile);
+      if (!profile) {
+        container.innerHTML = '<p style="color:#6b7280;">No profile available. Please complete the survey.</p>';
+        return;
+      }
+
+      const overall = (typeof profile.overall_score === 'number') ? profile.overall_score : null;
+      const firstDim = Array.isArray(profile.dimensional_match) && profile.dimensional_match[0];
+
+      const scoreClass = overall === null ? 'score-medium' : (overall >= 70 ? 'score-good' : overall >= 40 ? 'score-medium' : 'score-poor');
+      const scoreText = overall === null ? '-' : `${Math.round(overall)}%`;
+
+      container.innerHTML = `
+        <div style="text-align:center;">
+          <div class="score-circle ${scoreClass}" style="width:120px;height:120px;margin:0 auto;">${scoreText}</div>
+          <p style="margin-top:12px;">${profile.risk_level ? String(profile.risk_level).toUpperCase() : ''}</p>
+        </div>
+        <div style="margin-top:16px;">
+          ${firstDim ? `
+            <div style="padding:12px; border:1px solid var(--border-color); border-radius:8px;">
+              <div style="display:flex; justify-content:space-between;">
+                <strong>${firstDim.dimension}</strong>
+                <span style="font-weight:600;">${firstDim.match_percentage}%</span>
+              </div>
+              <div style="margin-top:8px; font-size:13px; color:#6b7280;">${firstDim.risk_level}</div>
+            </div>
+          ` : '<p style="color:#6b7280;">No dimensional data available</p>'}
+        </div>
+      `;
+
+      const createBtn = document.getElementById('createAccountFromProfile');
+      const scanBtn = document.getElementById('scanFromProfileBtn');
+
+      if (!appState.userId) {
+        createBtn.style.display = 'inline-block';
+        scanBtn.style.display = 'none';
+        createBtn.onclick = () => window.Clerk.openSignUp();
+      } else {
+        createBtn.style.display = 'none';
+        scanBtn.style.display = 'inline-block';
+        scanBtn.disabled = false;
+
+        if (appState.credits > 0) {
+          scanBtn.textContent = 'Scan Job';
+          scanBtn.onclick = () => navigate('job');
+        } else {
+          scanBtn.textContent = 'Buy Credits';
+          scanBtn.onclick = () => buyMoreCredits();
+        }
+      }
+    }
+
+    async function fetchUserProfile() {
+      if (!appState.userId) return;
+
+      try {
+        const token = await window.Clerk.session.getToken();
+        const resp = await fetch('/api/user/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        function updateHeaderForGuest() {
-            const headerControls = document.getElementById('headerControls');
-            if (!headerControls) return;
-            
-            headerControls.innerHTML = `
-                <button id="signInBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 14px;">Sign In</button>
-                <button id="signUpBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Create Account</button>
-            `;
-            
-            document.getElementById('signInBtn').onclick = () => window.Clerk.openSignIn();
-            document.getElementById('signUpBtn').onclick = () => window.Clerk.openSignUp();
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.profile) {
+            appState.profile = data.profile;
+            saveProfileLocal(appState.profile);
+            renderProfile();
+          }
         }
+      } catch (e) {
+        console.warn('fetchUserProfile error:', e);
+      }
+    }
 
-        function updateHeaderForAuthUser() {
-            const headerControls = document.getElementById('headerControls');
-            if (!headerControls) return;
-            
-            headerControls.innerHTML = `
-                <div class="credit-display" id="creditDisplay">Credits: <span id="creditValue">-</span></div>
-                <button class="btn btn-primary" id="buyCreditsHeaderBtn" onclick="buyMoreCredits()" style="padding: 8px 16px; font-size: 14px;">Buy More</button>
-                <button class="btn btn-secondary" onclick="signOutUser()" style="padding: 8px 16px; font-size: 14px;">Sign Out</button>
-            `;
-        }
+    // STRIPE
+    async function buyMoreCredits() {
+      if (!appState.userId) {
+        alert('Please sign in to buy credits.');
+        return;
+      }
 
-        function signOutUser() {
-            console.log("🔄 Starting sign out process...");
-            
-            // Set flag to prevent race condition
-            if (window.Clerk?.session) {
-                window.Clerk.session.isSigningOut = true;
-            }
-            
-            // Clear all local storage
-            localStorage.removeItem('pendingModule');
-            localStorage.removeItem('pendingSurvey');
-            
-            // Clear app state immediately
-            appState.userId = null;
-            appState.credits = 0;
-            appState.modules = [];
-            appState.activeModule = null;
-            appState.survey = {};
-            appState.currentQuestion = 0;
-            appState.lastJobResult = null;
-            
-            // Force UI update
-            updateHeaderForGuest();
-            navigate('welcome');
-            
-            // Then actually sign out
-            window.Clerk.signOut().then(() => {
-                console.log("✅ Sign out completed");
-                // Reset the flag after sign out
-                if (window.Clerk?.session) {
-                    window.Clerk.session.isSigningOut = false;
-                }
-            }).catch(err => {
-                console.error("❌ Sign out error:", err);
-                // Reset flag even on error
-                if (window.Clerk?.session) {
-                    window.Clerk.session.isSigningOut = false;
-                }
-            });
-        }
+      const stripePublishableKey = window.STRIPE_PUBLISHABLE_KEY;
+      if (!stripePublishableKey) {
+        alert('Stripe publishable key is not configured.');
+        return;
+      }
 
-        // SURVEY RENDERING
-        function renderQuestion() {
-            const container = document.getElementById('questionContainer');
-            const question = questions[appState.currentQuestion];
-            const currentValue = appState.survey[question.dimension];
-            
-            container.innerHTML = `
-                <div class="question">
-                    <h2>Question ${appState.currentQuestion + 1} of ${questions.length}</h2>
-                    <h3 style="margin: 16px 0;">${question.title}</h3>
-                    <div class="options">
-                        ${question.options.map(opt => `
-                            <div class="option ${currentValue === opt.value ? 'selected' : ''}" 
-                                 data-value="${opt.value}"
-                                 onclick="selectOption('${question.dimension}', ${opt.value}, this)">
-                                ${opt.text}
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-            
-            const progress = ((appState.currentQuestion + 1) / questions.length) * 100;
-            document.getElementById('surveyProgress').style.width = `${progress}%`;
-            
-            document.getElementById('prevBtn').style.display = 
-                appState.currentQuestion > 0 ? 'block' : 'none';
-            
-            const nextBtn = document.getElementById('nextBtn');
-            const isAnswered = currentValue !== undefined;
-            nextBtn.textContent = 
-                appState.currentQuestion === questions.length - 1 ? 'Complete Survey' : 'Next';
-            nextBtn.disabled = !isAnswered;
-        }
+      if (!window.Stripe) {
+        await loadStripe(stripePublishableKey);
+      }
 
-        function selectOption(dimension, value, element) {
-            document.querySelectorAll('.option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-            
-            element.classList.add('selected');
-            appState.survey[dimension] = value;
-            document.getElementById('nextBtn').disabled = false;
-            
-            // Save progress
-            saveSurveyProgress();
-            console.log("✅ Survey updated:", appState.survey);
-        }
-
-        function nextQuestion() {
-            if (appState.currentQuestion < questions.length - 1) {
-                appState.currentQuestion++;
-                renderQuestion();
-            } else {
-                console.log("✅ Survey completed:", appState.survey);
-                completeSurvey();
-            }
-        }
-
-        async function createNewModule() {
-            try {
-                const token = await window.Clerk.session.getToken();
-                
-                // ✅ Use the working scan-job endpoint instead of create-module
-                const traumaPayload = {
-                    safety_baseline: appState.survey.safety_baseline || 5,
-                    adhd_wiring: appState.survey.adhd_wiring || 5,
-                    capability: appState.survey.capability || 5,
-                    co_regulation: appState.survey.co_regulation || 5,
-                    financial: appState.survey.financial || 5
-                };
-                
-                const response = await fetch('/api/scan-job', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        job_description: "",  // Empty job for now
-                        trauma: traumaPayload,
-                        user_id: appState.userId,
-                        consume_credit: false  // Don't consume credit for survey-only
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to create module via scan-job');
-                }
-                
-                console.log("✅ Module created successfully via scan-job");
-                
-                // Refresh modules after creation
-                await fetchModules();
-                
-            } catch (error) {
-                console.error("❌ Error creating module:", error);
-                alert('Failed to save survey. Please try again.');
-            }
-        }
-
-        function completeSurvey() {
-            clearSurveyProgress(); // Clear saved progress
-            
-            if (appState.userId) {
-                createNewModule();
-            } else {
-                const pendingModule = {
-                    survey: appState.survey,
-                    created_at: new Date().toISOString()
-                };
-                localStorage.setItem('pendingModule', JSON.stringify(pendingModule));
-            }
-            
-            navigate('job');
-        }
-
-        function previousQuestion() {
-            if (appState.currentQuestion > 0) {
-                appState.currentQuestion--;
-                renderQuestion();
-            }
-        }
-
-        // Navigation with retry limit
-        function navigate(page, retryCount = 0) {
-            const MAX_RETRIES = 50;
-            
-            const targetElement = document.getElementById(page);
-            if (!targetElement) {
-                if (retryCount < MAX_RETRIES) {
-                    console.warn(`⏳ DOM not ready for page: ${page}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-                    setTimeout(() => navigate(page, retryCount + 1), 100);
-                } else {
-                    console.error(`❌ Failed to find page element '${page}' after ${MAX_RETRIES} attempts`);
-                    console.error(`Available elements:`, Array.from(document.querySelectorAll('.page')).map(el => el.id));
-                }
-                return;
-            }
-            
-            // Hide all pages
-            document.querySelectorAll('.page').forEach(p => {
-                if (p) p.classList.remove('active');
-            });
-            
-            // Show target page
-            targetElement.classList.add('active');
-            
-            // Handle special cases
-            if (page === 'survey') {
-                appState.currentQuestion = 0;
-                renderQuestion();
-            }
-            
-            console.log(`✅ Navigated to page: ${page}`);
-        }
-
-        // CREDITS
-        async function fetchCredits() {
-            if (!appState.userId) return;
-            
-            try {
-                const token = await window.Clerk.session.getToken();
-                
-                // Test multiple possible credit endpoints
-                const endpoints = ['/api/user/credits', '/api/credits', '/api/user/account'];
-                
-                for (const endpoint of endpoints) {
-                    try {
-                        const response = await fetch(endpoint, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            console.log('✅ Credits fetched from:', endpoint, data);
-                            
-                            if (data.credits !== undefined) {
-                                appState.credits = data.credits;
-                                updateCreditDisplay();
-                                return;
-                            }
-                        }
-                    } catch (e) {
-                        console.warn(`❌ ${endpoint} failed:`, e);
-                    }
-                }
-                
-                console.warn('❌ No credit endpoints working, defaulting to 0');
-                appState.credits = 0;
-                updateCreditDisplay();
-                
-            } catch (error) {
-                console.error("❌ Error fetching credits:", error);
-                appState.credits = 0;
-                updateCreditDisplay();
-            }
-        }
-
-        function updateCreditDisplay() {
-            if (!appState.userId) return;
-            
-            const creditValue = document.getElementById('creditValue');
-            const creditDisplay = document.getElementById('creditDisplay');
-            
-            if (creditValue && creditDisplay) {
-                creditValue.textContent = appState.credits;
-                creditDisplay.classList.toggle('warning', appState.credits <= 2);
-            }
-        }
-
-        function updateScanButton() {
-            const scanBtn = document.getElementById('scanBtn');
-            const buyCreditsBtn = document.getElementById('buyCreditsBtn');
-            
-            if (!appState.userId) {
-                scanBtn.textContent = 'Scan Job (Free Preview)';
-                scanBtn.disabled = false;
-                scanBtn.style.display = 'block';
-                buyCreditsBtn.style.display = 'none';
-            } else if (appState.credits > 0) {
-                scanBtn.textContent = `Scan Job (1 Credit)`;
-                scanBtn.disabled = false;
-                scanBtn.style.display = 'block';
-                buyCreditsBtn.style.display = 'none';
-            } else {
-                scanBtn.style.display = 'none';
-                buyCreditsBtn.style.display = 'block';
-            }
-        }
-
-        function updateDownloadButton() {
-            const downloadBtn = document.getElementById('downloadBtn');
-            const downloadBtnText = document.getElementById('downloadBtnText');
-            
-            if (!appState.userId) {
-                downloadBtnText.textContent = 'Create Free Account to Download Report';
-            } else if (appState.credits >= appState.creditCost) {
-                downloadBtnText.textContent = 'Download Report (1 Credit)';
-                downloadBtn.disabled = false;
-            } else {
-                downloadBtnText.textContent = 'Buy Credits to Download Report';
-                downloadBtn.disabled = true;
-            }
-        }
-
-        // JOB SCANNING
-        async function scanJob() {
-            const jobText = document.getElementById('jobDescription').value.trim();
-            if (!jobText) {
-                alert('Please paste a job description.');
-                return;
-            }
-
-            if (appState.userId && appState.credits <= 0) {
-                alert('No credits remaining. Please add credits to continue.');
-                return;
-            }
-
-            const scanBtn = document.getElementById('scanBtn');
-            scanBtn.disabled = true;
-            scanBtn.textContent = 'Scanning...';
-
-            try {
-                const traumaPayload = {
-                    safety_baseline: appState.survey.safety_baseline || 5,
-                    adhd_wiring: appState.survey.adhd_wiring || 5,
-                    capability: appState.survey.capability || 5,
-                    co_regulation: appState.survey.co_regulation || 5,
-                    financial: appState.survey.financial || 5
-                };
-
-                const token = appState.userId ? await window.Clerk.session.getToken() : null;
-                const response = await fetch('/api/scan-job', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token && { 'Authorization': `Bearer ${token}` })
-                    },
-                    body: JSON.stringify({
-                        user_id: appState.userId,
-                        trauma: traumaPayload,
-                        job_description: jobText,
-                        consume_credit: !!appState.userId
-                    })
-                });
-
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error);
-                }
-
-                const result = await response.json();
-                appState.lastJobResult = result;
-                
-                displayResults(result);
-                navigate('results');
-                
-                if (appState.userId) {
-                    await fetchCredits();
-                    updateScanButton();
-                }
-            } catch (error) {
-                console.error('❌ Job scan error:', error);
-                alert('Job scanning failed: ' + error.message);
-            } finally {
-                updateScanButton();
-            }
-        }
-
-        // RESULTS DISPLAY
-        function displayResults(result) {
-            const scoreEl = document.getElementById('overallScore');
-            scoreEl.textContent = `${Math.round(result.overall_score)}%`;
-            scoreEl.className = `score-circle ${
-                result.overall_score >= 70 ? 'score-good' : 
-                result.overall_score >= 40 ? 'score-medium' : 'score-poor'
-            }`;
-
-            const dimensionsEl = document.getElementById('dimensionalScores');
-            dimensionsEl.innerHTML = '';
-            result.dimensional_match.forEach(dim => {
-                dimensionsEl.innerHTML += `
-                    <div class="dimension">
-                        <div class="dimension-label">
-                            <span>${dim.dimension}</span>
-                            <span>${Math.round(dim.match_percentage)}%</span>
-                        </div>
-                        <div class="dimension-progress">
-                            <div class="dimension-fill" style="width: ${dim.match_percentage}%"></div>
-                        </div>
-                    </div>
-                `;
-            });
-
-            const greenFlagsEl = document.getElementById('greenFlags');
-            const redFlagsEl = document.getElementById('redFlags');
-            
-            greenFlagsEl.innerHTML = result.green_flags.length > 0 
-                ? result.green_flags.map(f => `<div class="flag green">${f}</div>`).join('')
-                : '<div class="flag">No strong green flags detected</div>';
-                
-            redFlagsEl.innerHTML = result.red_flags.length > 0
-                ? result.red_flags.map(f => `<div class="flag red">${f}</div>`).join('')
-                : '<div class="flag">No major red flags detected</div>';
-            
-            updateDownloadButton();
-        }
-
-        // MODULES SYSTEM
-        async function fetchModules() {
-            if (!appState.userId) {
-                loadGuestModules();
-                return;
-            }
-            
-            try {
-                const token = await window.Clerk.session.getToken();
-                const response = await fetch('/api/user/modules', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (!response.ok) throw new Error('Failed to fetch modules');
-                
-                const data = await response.json();
-                appState.modules = data.modules || [];
-                renderModules();
-            } catch (error) {
-                console.error("❌ Error fetching modules:", error);
-            }
-        }
-
-        function loadGuestModules() {
-            const pending = localStorage.getItem('pendingModule');
-            if (pending) {
-                appState.modules = [JSON.parse(pending)];
-                appState.activeModule = appState.modules[0];
-                appState.survey = appState.activeModule.survey || {};
-            }
-            renderModules();
-        }
-
-        function renderModules() {
-            const container = document.getElementById('modulesContainer');
-            if (!container) {
-                console.warn("⚠️ Modules container not found - skipping render");
-                return;
-            }
-            
-            container.innerHTML = '';
-            
-            if (appState.userId) {
-                const retakeBtn = document.createElement('button');
-                retakeBtn.className = 'btn btn-primary retake-survey-btn';
-                retakeBtn.textContent = 'Retake Survey';
-                retakeBtn.onclick = retakeSurvey;
-                container.appendChild(retakeBtn);
-            }
-            
-            const activeMod = appState.activeModule || 
-                             appState.modules.find(m => m.is_active) || 
-                             appState.modules[0];
-            
-            if (activeMod) {
-                const activeElement = createModuleElement(activeMod, true);
-                if (activeElement) container.appendChild(activeElement);
-            }
-            
-            appState.modules.filter(m => !m.is_active).forEach(mod => {
-                const savedElement = createModuleElement(mod, false);
-                if (savedElement) container.appendChild(savedElement);
-            });
-            
-            console.log("✅ Modules rendered successfully");
-        }
-
-        function createModuleElement(moduleData, isActive = false) {
-            if (!moduleData) {
-                console.warn("⚠️ Invalid module data");
-                return null;
-            }
-            
-            const moduleDiv = document.createElement('div');
-            moduleDiv.className = `module ${isActive ? 'active' : 'saved'}`;
-            
-            const completedAt = moduleData.completed_at || moduleData.created_at;
-            const surveyData = moduleData.survey_data || moduleData.survey || {};
-            const jobDesc = moduleData.job_description || '';
-            const hasResults = moduleData.scan_results;
-            
-            const headerDiv = document.createElement('div');
-            headerDiv.className = 'module-header';
-            headerDiv.innerHTML = `
-                <div class="module-title">${isActive ? 'Current Analysis' : 'Previous Analysis'}</div>
-            `;
-            
-            const surveyPanel = document.createElement('div');
-            surveyPanel.className = 'survey-results-panel';
-            surveyPanel.innerHTML = `
-                <h4>Survey Responses</h4>
-                ${renderSurveyResults(surveyData)}
-            `;
-            
-            const jobSection = document.createElement('div');
-            jobSection.className = 'job-description-section';
-            jobSection.style.margin = '20px 0';
-            jobSection.innerHTML = `
-                <h4>Job Description</h4>
-                <p style="font-size: 13px; color: #6b7280; white-space: pre-wrap;">${jobDesc || 'No job description scanned yet.'}</p>
-            `;
-            
-            if (hasResults) {
-                const resultsDiv = document.createElement('div');
-                resultsDiv.style.margin = '20px 0';
-                resultsDiv.innerHTML = `
-                    <h4>Scan Results</h4>
-                    <p style="font-size: 24px; font-weight: 700; color: var(--primary-color); margin: 8px 0;">
-                        ${Math.round(hasResults.overall_score || 0)}% Match
-                    </p>
-                    <button class="btn btn-primary" onclick="viewFullResults('${hasResults.id || ''}')" style="font-size: 14px; padding: 8px 16px;">
-                        View Full Results
-                    </button>
-                `;
-                jobSection.appendChild(resultsDiv);
-            }
-            
-            const dateDiv = document.createElement('div');
-            dateDiv.className = 'module-date';
-            dateDiv.textContent = formatDate(completedAt);
-            
-            moduleDiv.appendChild(headerDiv);
-            moduleDiv.appendChild(surveyPanel);
-            moduleDiv.appendChild(jobSection);
-            moduleDiv.appendChild(dateDiv);
-            
-            return moduleDiv;
-        }
-
-        function renderSurveyResults(survey) {
-            if (!survey) return '<p style="font-size: 13px; color: #6b7280;">No survey data.</p>';
-            
-            const labels = {
-                safety_baseline: "Safety Baseline",
-                adhd_wiring: "ADHD Wiring",
-                capability: "Capability",
-                co_regulation: "Co-Regulation",
-                financial: "Financial"
-            };
-            
-            return Object.entries(survey).map(([key, value]) => `
-                <div class="survey-result-item">
-                    <span>${labels[key] || key}:</span>
-                    <span style="font-weight: 600;">${value}/10</span>
-                </div>
-            `).join('');
-        }
-
-        function viewFullResults(moduleId) {
-            const module = appState.modules.find(m => m.id === moduleId);
-            if (module) {
-                appState.activeModule = module;
-                appState.survey = module.survey_data || module.survey || {};
-                appState.lastJobResult = module.scan_results;
-                displayResults(module.scan_results);
-                navigate('results');
-            }
-        }
-
-        async function retakeSurvey() {
-            if (!appState.userId) {
-                alert('Please sign in to retake survey.');
-                return;
-            }
-            
-            try {
-                const token = await window.Clerk.session.getToken();
-                
-                // ✅ Use API to deactivate current module
-                if (appState.activeModule?.id) {
-                    await fetch(`/api/user/modules/${appState.activeModule.id}`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({ is_active: false })
-                    });
-                }
-                
-                // Start fresh survey
-                appState.survey = {};
-                appState.currentQuestion = 0;
-                appState.lastJobResult = null;
-                
-                clearSurveyProgress();
-                navigate('survey');
-                
-            } catch (error) {
-                console.error("❌ Error deactivating module:", error);
-                alert('Failed to start new survey. Please try again.');
-            }
-        }
-
-        // DOWNLOAD HANDLING
-        async function handleDownload() {
-            if (!appState.userId) {
-                if (confirm('Create a free account to access your personalized report?')) {
-                    window.Clerk.openSignUp();
-                }
-                return;
-            }
-            
-            if (appState.credits <= 0) {
-                if (confirm('No credits remaining. Add credits to download reports?')) {
-                    buyMoreCredits();
-                }
-                return;
-            }
-            
-            downloadReport();
-        }
-
-        function downloadReport() {
-            if (!appState.lastJobResult) {
-                alert('No report available. Please scan a job first.');
-                return;
-            }
-
-            const report = {
-                scanned_at: new Date().toISOString(),
-                user_id: appState.userId,
-                survey_responses: appState.survey,
-                ...appState.lastJobResult
-            };
-
-            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `job-analysis-${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            
-            if (appState.userId) {
-                appState.credits--;
-                updateCreditDisplay();
-                updateDownloadButton();
-            }
-        }
-
-        // STRIPE INTEGRATION
-        async function buyMoreCredits() {
-            if (!appState.userId) {
-                alert('Please sign in to buy credits.');
-                return;
-            }
-            
-            const stripePublishableKey = window.STRIPE_PUBLISHABLE_KEY || 'pk_live_realoneloaded';
-            
-            if (!window.Stripe) {
-                await loadStripe(stripePublishableKey);
-            }
-            
-            try {
-                const token = await window.Clerk.session.getToken();
-                const response = await fetch('/api/create-checkout-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ credits_to_purchase: 1 })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.text();
-                    throw new Error(`HTTP ${response.status}: ${errorData}`);
-                }
-                
-                const { sessionId } = await response.json();
-                const stripe = window.Stripe(stripePublishableKey);
-                const { error } = await stripe.redirectToCheckout({ sessionId });
-                
-                if (error) throw new Error(error.message);
-                
-            } catch (error) {
-                console.error('❌ Stripe error:', error);
-                alert(`Failed to start checkout: ${error.message}`);
-            }
-        }
-
-        function loadStripe(publishableKey) {
-            return new Promise((resolve) => {
-                const script = document.createElement('script');
-                script.src = 'https://js.stripe.com/v3/';
-                script.onload = () => resolve(window.Stripe(publishableKey));
-                document.head.appendChild(script);
-            });
-        }
-
-        // Handle payment success
-        window.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('payment') === 'success') {
-                window.history.replaceState({}, document.title, window.location.pathname);
-                
-                if (appState.userId) {
-                    fetchCredits();
-                    fetchModules();
-                }
-                
-                alert('✅ Credits purchased successfully!');
-            }
+      try {
+        const token = await window.Clerk.session.getToken();
+        const response = await fetch('/api/create-checkout-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ credits_to_purchase: 1 })
         });
 
-                // ===== ADD THESE DEBUG FUNCTIONS AT THE BOTTOM =====
-
-        // Test your backend endpoints
-        async function debugBackend() {
-            try {
-                const token = await window.Clerk.session.getToken();
-                
-                // Test different possible endpoints
-                const endpoints = [
-                    '/api/user/modules',
-                    '/api/user/create-module', 
-                    '/api/modules/create',
-                    '/api/modules',
-                    '/api/user/module'
-                ];
-                
-                for (const endpoint of endpoints) {
-                    try {
-                        const response = await fetch(endpoint, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            },
-                            body: JSON.stringify({test: true})
-                        });
-                        console.log(`${endpoint}: ${response.status} ${response.statusText}`);
-                    } catch (e) {
-                        console.log(`${endpoint}: Failed`);
-                    }
-                }
-                
-            } catch (error) {
-                console.error('Debug failed:', error);
-            }
+        if (!response.ok) {
+          const errorData = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorData}`);
         }
 
-        // Check what your backend serves
-        async function checkBackend() {
-            const baseUrl = 'https://fuzzy-space-dollop-gg555q4wgr5hpvr6-8000.app.github.dev';
-            
-            try {
-                // Check root endpoint
-                const root = await fetch(baseUrl);
-                console.log('Root status:', root.status);
-                
-                // Check API root
-                const api = await fetch(baseUrl + '/api');
-                console.log('API root status:', api.status);
-                
-                // Check user endpoints
-                const user = await fetch(baseUrl + '/api/user');
-                console.log('User endpoint status:', user.status);
-                
-            } catch (error) {
-                console.error('Backend check failed:', error);
-            }
-        }
+        const { sessionId } = await response.json();
+        const stripe = window.Stripe(stripePublishableKey);
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+        if (error) throw new Error(error.message);
+      } catch (error) {
+        console.error('Stripe error:', error);
+        alert(`Failed to start checkout: ${error.message}`);
+      }
+    }
 
-        // ===== RUN DEBUG AUTOMATICALLY ON LOAD =====
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                console.log('🔍 Running backend debug...');
-                checkBackend();
-                if (appState.userId) {
-                    debugBackend();
-                }
-            }, 2000); // Wait 2 seconds for Clerk to load
-        });
-    
-    </script>
+    function loadStripe(publishableKey) {
+      return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = 'https://js.stripe.com/v3/';
+        script.onload = () => resolve(window.Stripe(publishableKey));
+        document.head.appendChild(script);
+      });
+    }
+
+    // Payment success handling (refresh credits/modules)
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('payment') === 'success') {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        if (appState.userId) {
+          fetchCredits();
+          fetchModules();
+        }
+        alert('Credits purchased successfully.');
+      }
+    });
+  </script>
 </body>
 </html>
